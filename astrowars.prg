@@ -12,7 +12,7 @@ PROGRAM astrowars;
 CONST
 
 NEC_UCOM43 = 0;
-STACK_SIZE = 4;
+STACK_SIZE = 12;
 
 NEC_UCOM4_PORTA = 0;
 NEC_UCOM4_PORTB = 1;
@@ -68,7 +68,7 @@ STRUCT cpu
 
     BYTE rom[2048];
     BYTE ram[2048];
-    BYTE stack[5];
+    BYTE stack[255];
     BYTE m_port_out[0x10];
 
     stackptr;
@@ -93,11 +93,12 @@ write_int(0,0,20,0,&cpu.m_acc);
 write_int(0,0,30,0,&cpu.m_op);
 write_int(0,0,40,0,&real_op);
 write_int(0,0,50,0,&cpu.m_icount);
+write_int(0,0,60,0,&cpu.stackptr);
 
 LOOP
 
 // dunno how this works. guess
-cpu.m_icount = 400;
+cpu.m_icount = 1;
 emulate();
 FRAME;
 END
@@ -540,7 +541,7 @@ function output_w(port, value)
 
 BEGIN
 
-DEBUG;
+cpu.m_port_out[port]=value;
 
 
 END
@@ -615,8 +616,14 @@ END
 
 // opcodes
 
-// 00 - NOP
 
+// Illegal opcodes
+function op_illegal()
+BEGIN
+    DEBUG;
+END
+
+// 00 - NOP
 function op_nop()
 
 BEGIN
@@ -667,7 +674,7 @@ function op_tc()
 
 BEGIN
 
-    DEBUG;
+    cpu.m_skip = (cpu.m_carry_f !=0);
 
 END
 
@@ -676,7 +683,11 @@ function op_ttm()
 
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_skip = (cpu.m_timer_f !=0);
 END
 
 
@@ -761,8 +772,8 @@ BEGIN
 
 END
 
-// 0e - OP
 
+// 0e - OP
 function op_op()
 
 BEGIN
@@ -772,6 +783,37 @@ BEGIN
 END
 
 
+// 0f - DEC
+function op_dec()
+
+BEGIN
+
+    cpu.m_acc = ( cpu.m_acc - 1 ) & 0xf;
+    cpu.m_skip = ( cpu.m_acc == 0xf );
+
+END
+
+
+// 10 - CMA
+function op_cma()
+BEGIN
+
+    DEBUG;
+END
+
+// 11 - CIA
+function op_cia()
+BEGIN
+
+    DEBUG;
+END
+
+// 12 - TLA
+function op_tla()
+BEGIN
+
+    DEBUG;
+END
 
 
 // 0x13 - DED
@@ -814,7 +856,47 @@ BEGIN
 END
 
 
-function op_std()
+// 16 - CLI
+function op_cli()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 17 - CI
+function op_ci()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 18 - EXL
+function op_exl()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 19 - ADC
+function op_adc()
+BEGIN
+
+    DEBUG;
+END
+
+// 1A - XC
+function op_xc()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 1B - STC
+function op_stc()
 
 BEGIN
 
@@ -823,6 +905,18 @@ BEGIN
 END
 
 
+// 1C - ILLEGAL
+
+
+// 1D - INM
+function op_inm()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 1E - OCD
 function op_ocd()
 
 BEGIN
@@ -830,6 +924,89 @@ BEGIN
     output_w(NEC_UCOM4_PORTD, cpu.m_arg >> 4);
     output_w(NEC_UCOM4_PORTC, cpu.m_arg & 0xf);
 END
+
+
+// 1F - DEM
+function op_dem()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 30 - RAR
+function op_rar()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 31 - EI
+function op_ei()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 32 - IP
+function op_ip()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 33 - IND
+function op_ind()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 40 - IA
+function op_ia()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 41 - JPA
+function op_jpa()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 42 - TAZ
+function op_taz()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 43 - TAW
+function op_taw()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 44 - OE
+function op_oe()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 45 - ILLEGAL
 
 
 // 0x46 - TLY
@@ -846,6 +1023,14 @@ BEGIN
 END
 
 
+// 47 - THX
+function op_thx()
+BEGIN
+
+    DEBUG;
+END
+
+
 // 0x48 - RT
 function op_rt()
 
@@ -853,6 +1038,47 @@ BEGIN
     cpu.m_icount--;
     pop_stack();
 END
+
+
+// 49 - RTS
+function op_rts()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 4A - XAZ
+function op_xaz()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 4B - XAW
+function op_xaw()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 4C - XLS
+function op_xls()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 4D - XHR
+function op_xhr()
+BEGIN
+
+    DEBUG;
+END
+
 
 // 0x4E - XLY
 function op_xly()
@@ -871,8 +1097,34 @@ BEGIN
 END
 
 
+// 4F - XHX
+function op_xhx()
+BEGIN
 
-// 2B - XM  (0x28)
+    DEBUG;
+END
+
+
+
+// OPS & 0xFC
+
+// 20 - FBF
+function op_fbf()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 24 - TAB
+function op_tab()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 28 - XM  (0x2B)
 //
 function op_xm()
 
@@ -887,7 +1139,8 @@ BEGIN
     cpu.m_dph ^=  (cpu.m_op & 0x03);
 END
 
-// 2B - XMD  (0x2c)
+
+// 2C - XMD
 //
 function op_xmd()
 
@@ -900,6 +1153,16 @@ BEGIN
 END
 
 
+// 34 - CMB
+function op_cmb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 38
+
 function op_lm()
 
 BEGIN
@@ -911,6 +1174,55 @@ BEGIN
 END
 
 
+// 3C - XMI
+function op_xmi()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 50 - TPB
+function op_tpb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 54 - TPA
+function op_tpa()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 58 - TMB
+function op_tmb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 5C - FBT
+function op_fbt()
+BEGIN
+
+    DEBUG;
+END
+
+// 60 - RPB
+function op_rpb()
+BEGIN
+
+    DEBUG;
+END
+
+
+
+// 64 - REB
 function op_reb()
 
 BEGIN
@@ -919,6 +1231,56 @@ BEGIN
     output_w(NEC_UCOM4_PORTE, cpu.m_port_out[NEC_UCOM4_PORTE] & (0xFF-cpu.m_bitmask));
 
 END
+
+
+// 68 - RMB
+function op_rmb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 6C - RFB
+function op_rfb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 70 - SPB
+function op_spb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 74 - SEB
+function op_seb()
+BEGIN
+
+    output_w(NEC_UCOM4_PORTE, cpu.m_port_out[NEC_UCOM4_PORTE] | cpu.m_bitmask);
+
+END
+
+
+// 78 - SMB
+function op_smb()
+BEGIN
+
+    DEBUG;
+END
+
+
+// 7C - SFB
+function op_sfb()
+BEGIN
+
+    DEBUG;
+END
+
 
 
 // 0x80 - LDZ
