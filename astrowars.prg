@@ -11,6 +11,7 @@ PROGRAM astrowars;
 GLOBAL
 
 NEC_UCOM43 = 0;
+real_op = 0;
 
 // CPU definition
 STRUCT cpu
@@ -24,11 +25,17 @@ STRUCT cpu
 
     BYTE m_dph;
     BYTE m_dpl;
-    m_family;
+
+    BYTE m_timer_f;
+
+    BYTE m_family;
+
     m_int_f;
     m_inte_f;
     m_icount;
     m_skip;
+    m_prgmask;
+    m_prgwidth;
 
     BYTE rom[2048];
     BYTE ram[2048];
@@ -46,6 +53,10 @@ load("d553c-153.s01",&cpu.rom);
 reset();
 write_int(0,0,0,0,&cpu.m_pc);
 write_int(0,0,10,0,&cpu.m_arg);
+write_int(0,0,20,0,&cpu.m_acc);
+write_int(0,0,30,0,&cpu.m_op);
+write_int(0,0,40,0,&real_op);
+write_int(0,0,50,0,&cpu.m_icount);
 
 LOOP
 
@@ -66,6 +77,9 @@ cpu.m_op = 0;
 cpu.m_arg = 0;
 cpu.m_skip = false;
 cpu.m_family = NEC_UCOM43;
+
+// 2k ROM
+cpu.m_prgmask = 0x7FF;
 
 END
 
@@ -150,14 +164,38 @@ WHILE(cpu.m_icount>0)
                     op_stm();
                 end
 
-                case 0xA0:
-                    op_jmp();
+                case 0x15:
+                    op_ldi();
+                end
+
+                case 0x48:
+                    op_rt();
+                end
+
+                default:
+                    real_op = cpu.m_op & 0xfc;
+
+                    switch(cpu.m_op &0xfc)
+                        case 0x28:
+                            op_xm();
+                        end
+                        case 0x2c:
+                            op_xmd();
+                        end
+
+                        default:
+                            loop;
+                                frame;
+                            end
+                        end
+
+                    end
                 end
             end
         end
     end
     frame;
-
+//    debug;
 END
 
 END
@@ -175,12 +213,33 @@ BEGIN
 
     addr = cpu.m_dph << 4 | cpu.m_dpl;
     cpu.ram[addr]=value;
-    DEBUG;
+
+
+END
+
+function ram_r()
+
+PRIVATE
+
+WORD addr;
+
+BEGIN
+
+    addr = cpu.m_dph << 4 | cpu.m_dpl;
+    return (cpu.ram[addr]);
 
 
 END
 
 
+// STACK
+
+function pop_stack()
+BEGIN
+
+    DEBUG;
+
+END
 
 
 
@@ -221,6 +280,7 @@ function push_stack()
 
 BEGIN
 
+    DEBUG;
 
 END
 
@@ -238,6 +298,8 @@ cpu.m_pc = 0xf << 2;
 cpu.m_int_f = 0;
 cpu.m_inte_f = (cpu.m_family != NEC_UCOM43);
 
+DEBUG;
+
 END
 
 
@@ -249,6 +311,7 @@ function op_nop()
 
 BEGIN
 // NOTHING! HURRAH!
+    DEBUG;
 END
 
 // 01 - DI (not used for astro wars)
@@ -267,6 +330,7 @@ BEGIN
 END
 
 // 02 - S
+// Store ACC to RAM
 function op_s()
 
 BEGIN
@@ -276,9 +340,13 @@ BEGIN
 END
 
 // 03 - TIT
+// Interrupt
 function op_tit()
 
 BEGIN
+
+    cpu.m_skip = (cpu.m_int_f!=0);
+    cpu.m_int_f = 0;
 
 
 END
@@ -288,6 +356,7 @@ function op_tc()
 
 BEGIN
 
+    DEBUG;
 
 END
 
@@ -296,14 +365,65 @@ function op_ttm()
 
 BEGIN
 
+    DEBUG;
+END
+
+// 15 - LDI X
+// LOAD DP with X
+function op_ldi()
+
+BEGIN
+    cpu.m_dph = cpu.m_arg >> 4 & 0xf;
+    cpu.m_dpl = cpu.m_arg & 0xf;
 
 END
+
+// 0x48 - RT
+function op_rt()
+
+BEGIN
+    cpu.m_icount--;
+    pop_stack();
+END
+
+
+// 2B - XM  (0x28)
+//
+function op_xm()
+
+PRIVATE
+BYTE old_acc;
+
+BEGIN
+
+    old_acc = cpu.m_acc;
+    cpu.m_acc = ram_r();
+    ram_w(old_acc);
+    cpu.m_dph ^=  (cpu.m_op & 0x03);
+
+END
+
+// 2B - XMD  (0x2c)
+//
+function op_xmd()
+
+
+BEGIN
+
+    op_xm();
+    cpu.m_dpl = (cpu.m_dpl -1) & 0xf;
+    cpu.m_skip = (cpu.m_dpl == 0xf);
+
+END
+
+
 
 // 0x80 - LDZ
 function op_ldz()
 
 BEGIN
 
+    DEBUG;
 
 END
 
@@ -311,7 +431,9 @@ END
 function op_li()
 BEGIN
 
-FRAME;
+    if((cpu.m_prev_op & 0xf0) != (cpu.m_op & 0xf0))
+        cpu.m_acc = cpu.m_op & 0x0f;
+    end
 
 END
 
@@ -319,6 +441,11 @@ END
 function op_jmpcal()
 
 BEGIN
+    if (cpu.m_op & 0x08)
+        push_stack();
+    end
+
+    cpu.m_pc = (( cpu.m_op & 0x07) << 8 | cpu.m_arg) & cpu.m_prgmask;
 
 
 END
@@ -327,7 +454,8 @@ END
 function op_czp()
 
 BEGIN
-
+    push_stack();
+    cpu.m_pc = (cpu.m_op & 0x0f) << 2;
 
 END
 
@@ -336,6 +464,7 @@ function op_jcp()
 
 BEGIN
 
+    cpu.m_pc = ( cpu.m_pc & 0xFF00) | (cpu.m_acc << 2);
 
 END
 
@@ -345,7 +474,16 @@ END
 function op_stm()
 BEGIN
 
-DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_timer_f = 0;
+
+    // Set a timer to fire at m_arg * 640usec
+    // TODO
+
+    DEBUG;
 
 END
 
@@ -353,6 +491,6 @@ function op_jmp()
 
 BEGIN
 
-DEBUG;
+    DEBUG;
 
 END
