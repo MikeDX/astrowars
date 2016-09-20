@@ -196,6 +196,62 @@ WHILE(cpu.m_icount>0)
                     op_tc();
                 end
 
+                case 0x05:
+                    op_ttm();
+                end
+
+                case 0x06:
+                    op_daa();
+                end
+
+                case 0x07:
+                    op_tal();
+                end
+
+                case 0x08:
+                    op_ad();
+                end
+
+                case 0x09:
+                    op_ads();
+                end
+
+                case 0x0A:
+                    op_das();
+                end
+
+                case 0x0B:
+                    op_clc();
+                end
+
+                case 0x0C:
+                    op_cm();
+                end
+
+                case 0x0D:
+                    op_inc();
+                end
+
+                case 0x0E:
+                    op_op();
+                end
+
+                case 0x0F:
+                    op_dec();
+                end
+
+                case 0x10:
+                    op_cma();
+                end
+
+                case 0x11:
+                    op_cia();
+                end
+
+                case 0x12:
+                    op_tla();
+                end
+
                 case 0x13:
                     op_ded();
                 end
@@ -208,43 +264,208 @@ WHILE(cpu.m_icount>0)
                     op_ldi();
                 end
 
+                case 0x16:
+                    op_cli();
+                end
+
+                case 0x17:
+                    op_ci();
+                end
+
+                case 0x18:
+                    op_exl();
+                end
+
+                case 0x19:
+                    op_adc();
+                end
+
+                case 0x1A:
+                    op_xc();
+                end
+
                 case 0x1B:
-                    op_std();
+                    op_stc();
+                end
+
+                case 0x1C:
+                    op_illegal();
+                end
+
+                case 0x1D:
+                    op_inm();
                 end
 
                 case 0x1E:
                     op_ocd();
                 end
 
+                case 0x1F:
+                    op_exl();
+                end
+
+
+                case 0x30:
+                    op_rar();
+                end
+
+                case 0x31:
+                    op_ei();
+                end
+
+                case 0x32:
+                    op_ip();
+                end
+
+                case 0x33:
+                    op_ind();
+                end
+
+
+                case 0x40:
+                    op_ia();
+                end
+
+                case 0x41:
+                    op_jpa();
+                end
+
+                case 0x42:
+                    op_taz();
+                end
+
+                case 0x43:
+                    op_taw();
+                end
+
+                case 0x44:
+                    op_oe();
+                end
+
+                case 0x45:
+                    op_illegal();
+                end
+
                 case 0x46:
                     op_tly();
+                end
+
+                case 0x47:
+                    op_thx();
                 end
 
                 case 0x48:
                     op_rt();
                 end
 
+                case 0x49:
+                    op_rts();
+                end
+
+                case 0x4a:
+                    op_xaz();
+                end
+
+                case 0x4b:
+                    op_xaw();
+                end
+
+                case 0x4c:
+                    op_xls();
+                end
+
+                case 0x4d:
+                    op_xhr();
+                end
+
                 case 0x4e:
                     op_xly();
                 end
+
+                case 0x4f:
+                    op_xhx();
+                end
+
 
                 default:
                     real_op = cpu.m_op & 0xfc;
 
                     switch(cpu.m_op &0xfc)
+
+                        case 0x20:
+                            op_fbf();
+                        end
+
+                        case 0x24:
+                            op_tab();
+                        end
+
                         case 0x28:
                             op_xm();
                         end
+
                         case 0x2c:
                             op_xmd();
+                        end
+
+                        case 0x34:
+                            op_cmb();
                         end
 
                         case 0x38:
                             op_lm();
                         end
 
+                        case 0x3C:
+                            op_xmi();
+                        end
+
+                        case 0x50:
+                            op_tpb();
+                        end
+
+                        case 0x54:
+                            op_tpa();
+                        end
+
+                        case 0x58:
+                            op_tmb();
+                        end
+
+                        case 0x5c:
+                            op_fbt();
+                        end
+
+                        case 0x60:
+                            op_rpb();
+                        end
+
                         case 0x64:
                             op_reb();
+                        end
+
+                        case 0x68:
+                            op_rmb();
+                        end
+
+                        case 0x6c:
+                            op_rfb();
+                        end
+
+                        case 0x70:
+                            op_spb();
+                        end
+
+                        case 0x74:
+                            op_seb();
+                        end
+
+                        case 0x78:
+                            op_smb();
+                        end
+
+                        case 0x7c:
+                            op_sfb();
                         end
 
                         default:
@@ -435,7 +656,7 @@ function op_tit()
 
 BEGIN
 
-    cpu.m_skip = (cpu.m_int_f!=0);
+    cpu.m_skip = ( cpu.m_int_f != 0 );
     cpu.m_int_f = 0;
 
     debug;
@@ -457,6 +678,101 @@ BEGIN
 
     DEBUG;
 END
+
+
+// 06 - DAA
+function op_daa()
+
+BEGIN
+
+    cpu.m_acc = ( cpu.m_acc + 6 ) &0xf;
+END
+
+
+// 07 - TAL
+function op_tal()
+
+BEGIN
+
+    cpu.m_dpl = cpu.m_acc;
+END
+
+// 08 - AD
+function op_ad()
+
+BEGIN
+
+    cpu.m_acc += ram_r();
+    cpu.m_skip = (( cpu.m_acc & 0x10 ) !=0 );
+    cpu.m_acc &= 0xf;
+
+END
+
+
+// 09 - ADS
+function op_ads()
+
+BEGIN
+
+    op_adc();
+    cpu.m_skip = ( cpu.m_carry_f !=0 );
+
+END
+
+
+// 0a - DAS
+function op_das()
+
+BEGIN
+
+    cpu.m_acc = ( cpu.m_acc + 10 ) &0xf;
+
+
+END
+
+
+// 0b - CLC
+function op_clc()
+
+BEGIN
+
+    cpu.m_carry_f = 0;
+
+
+END
+
+// 0c - CM
+function op_cm()
+
+BEGIN
+
+    cpu.m_skip = ( cpu.m_acc == ram_r() );
+
+END
+
+
+// 0d - INC
+function op_inc()
+
+BEGIN
+
+    cpu.m_acc = ( cpu.m_acc + 1 ) & 0xf;
+    cpu.m_skip = ( cpu.m_acc == 0 );
+
+END
+
+// 0e - OP
+
+function op_op()
+
+BEGIN
+
+    output_w(cpu.m_dpl, cpu.m_acc);
+
+END
+
+
+
 
 // 0x13 - DED
 function op_ded()
