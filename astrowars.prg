@@ -36,7 +36,7 @@ UCOM43_F = 6;
 GLOBAL
 
 real_op = 0;
-
+readport = 0;
 // CPU definition
 STRUCT cpu
     WORD m_pc;
@@ -54,12 +54,16 @@ STRUCT cpu
     BYTE m_carry_s_f;
 
     BYTE m_timer_f;
+    m_time;
+    m_timeout;
 
     BYTE m_family;
 
     m_int_f;
     m_inte_f;
     m_icount;
+    m_oldicount;
+
     m_skip;
     m_prgmask;
     m_prgwidth;
@@ -70,6 +74,7 @@ STRUCT cpu
     BYTE ram[2048];
     BYTE stack[255];
     BYTE m_port_out[0x10];
+    BYTE registers[16];
 
     stackptr;
 
@@ -85,7 +90,9 @@ BEGIN
 // Load ROM
 load("d553c-153.s01",&cpu.rom);
 //set_mode(640480);
-
+set_fps(60,0);
+load_fpg("graphics.fpg");
+put_screen(0,1);
 reset();
 write_int(0,0,0,0,&cpu.m_pc);
 write_int(0,0,10,0,&cpu.m_arg);
@@ -94,13 +101,24 @@ write_int(0,0,30,0,&cpu.m_op);
 write_int(0,0,40,0,&real_op);
 write_int(0,0,50,0,&cpu.m_icount);
 write_int(0,0,60,0,&cpu.stackptr);
+write_int(0,0,70,0,&cpu.m_carry_f);
+write_int(0,0,70,0,&cpu.m_timeout);
+
+//write_int(0,0,70,0,&cpu.m_port_out);
+//write_int(0,0,80,0,&cpu.m_port_out[1]);
+//write_int(0,0,90,0,&cpu.m_port_out[2]);
+//write_int(0,0,100,0,&cpu.m_port_out[3]);
 
 LOOP
 
 // dunno how this works. guess
-cpu.m_icount = 64;
+cpu.m_icount += 100000;//400000/60;
 emulate();
-cpu.m_timer_f = 1;
+//cpu.m_inte_f =1 ;
+//cpu.m_int_f = 1;
+
+
+//cpu.m_timer_f = 1;
 
 FRAME;
 END
@@ -135,6 +153,8 @@ WHILE(cpu.m_icount>0)
             break;
         END
     END
+
+    cpu.m_oldicount = cpu.m_icount;
 
     cpu.m_prev_op = cpu.m_op;
     cpu.m_prev_pc = cpu.m_prev_pc;
@@ -482,6 +502,14 @@ WHILE(cpu.m_icount>0)
             end
         end
     end
+
+    if(cpu.m_timer_f == 0)
+        cpu.m_timeout -= cpu.m_oldicount - cpu.m_icount;
+        if(cpu.m_timeout<=0)
+            DEBUG;
+            cpu.m_timer_f = 1;
+        end
+    end
     //frame;
 //    debug;
 END
@@ -500,8 +528,8 @@ WORD addr;
 BEGIN
 
     addr = cpu.m_dph << 4 | cpu.m_dpl;
-    cpu.ram[addr]=value;
-
+    cpu.ram[addr & cpu.m_datamask &0xf]=value;
+    DEBUG;
 END
 
 function ram_r()
@@ -513,7 +541,8 @@ WORD addr;
 BEGIN
 
     addr = cpu.m_dph << 4 | cpu.m_dpl;
-    return (cpu.ram[addr]);
+    DEBUG;
+    return (cpu.ram[addr & cpu.m_datamask] & 0xf);
 
 
 END
@@ -552,7 +581,9 @@ function input_r(port)
 
 BEGIN
 
-    DEBUG;
+    readport = port;
+
+    return (cpu.m_port_out[port]);
 
 END
 
@@ -562,13 +593,17 @@ END
 function ucom43_reg_w(reg, value)
 BEGIN
 
+    cpu.registers[reg]=value;
+
     DEBUG;
 
 END
 
 function ucom43_reg_r(reg)
 BEGIN
+
     DEBUG;
+    return(cpu.registers[reg]);
 END
 
 
@@ -585,6 +620,8 @@ function inc_pc()
 begin
 
 // increment pc, but only lower 8 bits
+//cpu.m_pc++;
+//cpu.m_pc &=0xFF;
 cpu.m_pc = (cpu.m_pc &0xFF00) | ((cpu.m_pc +1) & 0xFF);
 
 end
@@ -697,6 +734,11 @@ BEGIN
     end
 
     cpu.m_skip = (cpu.m_timer_f !=0);
+
+    IF(cpu.m_skip)
+        DEBUG;
+    END
+
 END
 
 
@@ -807,7 +849,7 @@ END
 function op_cma()
 BEGIN
 
-    DEBUG;
+    cpu.m_acc ^= 0xf;
 END
 
 // 11 - CIA
@@ -849,6 +891,9 @@ BEGIN
     // Set a timer to fire at m_arg * 640usec
     // TODO
 
+    cpu.m_timeout = ((cpu.m_arg &0x3f) +1)*63;
+    cpu.m_time = 0;
+
     DEBUG;
 
 END
@@ -878,7 +923,7 @@ END
 function op_ci()
 BEGIN
 
-    DEBUG;
+    cpu.m_skip = (cpu.m_acc == (cpu.m_arg & 0x0f));
 END
 
 
@@ -1145,6 +1190,10 @@ BYTE old_dpl;
 
 BEGIN
 
+    if(!check_op_43())
+        return;
+    end
+
     cpu.m_icount--;
     old_dpl = cpu.m_dpl;
     cpu.m_dpl = ucom43_reg_r(UCOM43_Y);
@@ -1350,7 +1399,8 @@ END
 function op_smb()
 BEGIN
 
-    DEBUG;
+    ram_w(ram_r() | cpu.m_bitmask);
+
 END
 
 
