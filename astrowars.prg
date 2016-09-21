@@ -98,8 +98,10 @@ write_int(0,0,60,0,&cpu.stackptr);
 LOOP
 
 // dunno how this works. guess
-cpu.m_icount = 1;
+cpu.m_icount = 64;
 emulate();
+cpu.m_timer_f = 1;
+
 FRAME;
 END
 
@@ -546,6 +548,14 @@ cpu.m_port_out[port]=value;
 
 END
 
+function input_r(port)
+
+BEGIN
+
+    DEBUG;
+
+END
+
 
 // registers
 
@@ -653,7 +663,6 @@ function op_s()
 BEGIN
 
     ram_w(cpu.m_acc);
-    debug;
 
 END
 
@@ -860,7 +869,8 @@ END
 function op_cli()
 BEGIN
 
-    DEBUG;
+    cpu.m_skip = ( cpu.m_dpl == ( cpu.m_arg & 0x0f));
+
 END
 
 
@@ -884,7 +894,10 @@ END
 function op_adc()
 BEGIN
 
-    DEBUG;
+    cpu.m_acc += ram_r() + cpu.m_carry_f;
+    cpu.m_carry_f = cpu.m_acc >> 4 & 1;
+    cpu.m_acc &= 0xf;
+
 END
 
 // 1A - XC
@@ -910,9 +923,20 @@ END
 
 // 1D - INM
 function op_inm()
+
+PRIVATE
+BYTE val;
+
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    val = (ram_r() +1) & 0xf;
+    ram_w(val);
+    cpu.m_skip = (val==0);
+
 END
 
 
@@ -936,9 +960,20 @@ END
 
 // 30 - RAR
 function op_rar()
+PRIVATE
+
+BYTE c;
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    c = cpu.m_acc &1;
+    cpu.m_acc = cpu.m_acc >> 1 | cpu.m_carry_f << 3;
+    cpu.m_carry_f = c;
+
+
 END
 
 
@@ -962,7 +997,9 @@ END
 function op_ind()
 BEGIN
 
-    DEBUG;
+    cpu.m_dpl = ( cpu.m_dpl + 1) & 0xf;
+    cpu.m_skip = ( cpu.m_dpl == 0);
+
 END
 
 
@@ -994,7 +1031,13 @@ END
 function op_taw()
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_icount--;
+    ucom43_reg_w(UCOM43_W, cpu.m_acc);
+
 END
 
 
@@ -1002,7 +1045,8 @@ END
 function op_oe()
 BEGIN
 
-    DEBUG;
+    cpu.m_icount--;
+    output_w(NEC_UCOM4_PORTE, cpu.m_acc);
 END
 
 
@@ -1058,9 +1102,21 @@ END
 
 // 4B - XAW
 function op_xaw()
+
+PRIVATE
+BYTE old_acc;
+
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_icount--;
+    old_acc = cpu.m_acc;
+    cpu.m_acc = ucom43_reg_r(UCOM43_W);
+    ucom43_reg_w(UCOM43_W, old_acc);
+
 END
 
 
@@ -1112,7 +1168,13 @@ END
 function op_fbf()
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_icount--;
+    cpu.m_skip = ((ucom43_reg_r(UCOM43_F) & cpu.m_bitmask) == 0);
+
 END
 
 
@@ -1120,7 +1182,8 @@ END
 function op_tab()
 BEGIN
 
-    DEBUG;
+    cpu.m_skip = ((cpu.m_acc & cpu.m_bitmask) !=0);
+
 END
 
 
@@ -1178,7 +1241,10 @@ END
 function op_xmi()
 BEGIN
 
-    DEBUG;
+    op_xm();
+    cpu.m_dpl = (cpu.m_dpl + 1) & 0xf;
+    cpu.m_skip = ( cpu.m_dpl == 0);
+
 END
 
 
@@ -1186,7 +1252,8 @@ END
 function op_tpb()
 BEGIN
 
-    DEBUG;
+    cpu.m_skip = ((input_r(cpu.m_dpl) & cpu.m_bitmask) !=0);
+
 END
 
 
@@ -1202,7 +1269,8 @@ END
 function op_tmb()
 BEGIN
 
-    DEBUG;
+    cpu.m_skip = ((ram_r() & cpu.m_bitmask) !=0);
+
 END
 
 
@@ -1210,7 +1278,13 @@ END
 function op_fbt()
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_icount--;
+    cpu.m_skip = ((ucom43_reg_r(UCOM43_F) & cpu.m_bitmask) !=0);
+
 END
 
 // 60 - RPB
@@ -1237,7 +1311,7 @@ END
 function op_rmb()
 BEGIN
 
-    DEBUG;
+    ram_w(ram_r() & (0xFF - cpu.m_bitmask));
 END
 
 
@@ -1245,7 +1319,13 @@ END
 function op_rfb()
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.m_icount--;
+    ucom43_reg_w(UCOM43_f, ucom43_reg_r(UCOM43_F) & (0xFF - cpu.m_bitmask));
+
 END
 
 
@@ -1278,7 +1358,13 @@ END
 function op_sfb()
 BEGIN
 
-    DEBUG;
+     if(!check_op_43())
+        return;
+     end
+
+     cpu.m_icount--;
+     ucom43_reg_w(UCOM43_F, ucom43_reg_r(UCOM43_F) | cpu.m_bitmask);
+
 END
 
 
