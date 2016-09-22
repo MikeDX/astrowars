@@ -40,7 +40,9 @@ registers[8];
 real_op = 0;
 readport = 0;
 // CPU definition
-d = false;
+d = true;
+bp = 165824;
+
 STRUCT dbg
     string pc;
     string dp;
@@ -137,10 +139,15 @@ write_int(0,0,90,0,&cpu.m_skip);
 for(x=0;x<16;x++)
 for(y=0;y<8;y++)
 
+ram[x+y*16]=x+y*16;
+write_int(0,10+x*20,100+y*10,1,&ram[x+y*16]);//&ram[x+(y*16)]);
+end
+end
 
-write_int(0,30+x*14,100+y*10,1,&ram[x+y*16]);
-end
-end
+//loop
+//frame;
+//end
+
 
 LOOP
 
@@ -580,7 +587,7 @@ WHILE(cpu.m_icount>0)
     //dbg.pc[0]="a";
     //dbg.pc[1]="b";
 
-    if(key(_esc))
+    if(key(_esc) || cpu.m_tickcount == bp)
         d = true;
     end
 
@@ -730,10 +737,13 @@ BEGIN
     addr = cpu.m_dph << 4 | cpu.m_dpl;
     cpu.ram[addr & cpu.m_datamask]=value&0xf;
     ram[addr & cpu.m_datamask]=value&0xf;
+/*
     if(value!=0)
         d = true;
         DEBUG;
     end
+
+*/
 END
 
 function ram_r()
@@ -803,8 +813,11 @@ END
 function ucom43_reg_w(reg, value)
 BEGIN
 
-    cpu.registers[reg]=value;
-    registers[reg]=value;
+//    cpu.registers[reg]=value;
+//    registers[reg]=value;
+
+    cpu.ram[cpu.m_datamask-reg]=value;
+    ram[cpu.m_datamask-reg]=value;
 
     DEBUG;
 
@@ -814,7 +827,7 @@ function ucom43_reg_r(reg)
 BEGIN
 
     DEBUG;
-    return(cpu.registers[reg]);
+    return(cpu.ram[cpu.m_datamask-reg]);//registers[reg]);
 END
 
 
@@ -957,10 +970,6 @@ BEGIN
     if(cpu.m_timer_f == 1)
         cpu.m_skip = true;
     end
-
-    IF(cpu.m_skip)
-        DEBUG;
-    END
 
 END
 
@@ -1135,9 +1144,9 @@ BEGIN
     // Set a timer to fire at m_arg * 640usec
     // TODO
 
-    cpu.m_timeout = ((cpu.m_arg &0x3f) +1)*63;
+    cpu.m_timeout = ((cpu.m_arg &0x3f) +1)*63 + (cpu.m_oldicount - cpu.m_icount);
     cpu.m_time = 0;
-    cpu.m_oldicount = cpu.m_icount;
+    //cpu.m_oldicount = cpu.m_icount;
 
   //  DEBUG;
 
