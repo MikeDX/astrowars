@@ -204,7 +204,7 @@ void setup_gfx(void) {
 
 	for(x=0;x<15;x++) {
 		for(y=0;y<10;y++) {
-			sprintf(filename,"gfx/%d.%d.png",y,x);
+			sprintf(filename,"data/gfx/%d.%d.png",y,x);
 			gfx[y][x]=IMG_Load(filename);		
 			if(gfx[y][x]) {
 				rect.x=gfx_x[y][x];
@@ -451,7 +451,7 @@ int main(int argc, char *argv[])
 	//round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
 
 	ucom4_reset(&cpu);
-	if(load_rom(&cpu, "astrowars.rom", 0x800)!=0x800) {
+	if(load_rom(&cpu, "data/astrowars.rom", 0x800)!=0x800) {
 		printf("Failed to load astrowars.rom\n");
 		return -1;
 	}
