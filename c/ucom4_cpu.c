@@ -33,11 +33,21 @@ void ucom4_reset(ucom4cpu *cpu) {
 	cpu->tc         = 0;
 	cpu->timer_f    = 0;
 	cpu->stack_levels = 3;
-	memset(cpu->ram,0,0x80);
-	memset(cpu->port_out,0,0x10);
+	memset(cpu->ram,0,sizeof(cpu->ram));
+	memset(cpu->port_out,0,sizeof(cpu->port_out));
+	memset(cpu->display_state,0,sizeof(cpu->display_state));
+	memset(cpu->display_cache,~0,sizeof(cpu->display_cache));
+	memset(cpu->display_decay,0,sizeof(cpu->display_decay));
+	memset(cpu->display_segmask,0,sizeof(cpu->display_segmask));
+	
+	//memset(cpu->port, 0, sizeof(cpu->port));
+
+//	cpu->imp_mix = 0;
+	
 	cpu->plate = 0;
 	cpu->grid = 0;
-	
+	cpu->display_wait = 33;
+	cpu->decay_ticks = 0;
 }
 
 void do_interrupt(void) {
@@ -115,20 +125,32 @@ uint8_t input_r(ucom4cpu *cpu, int index)
 	switch (index)
 	{
 		case NEC_UCOM4_PORTA:
+			break;
 		case NEC_UCOM4_PORTB:
-			printf("Reading input port[%d]\n",index);
+//			inp = 0x1;
+			//printf("Reading input port[%d]\n",index);
 			break;
 	}
+//	inp = 0xf;
 	return inp & 0xf;
 }
 
+void ucom4_display_decay(ucom4cpu *cpu);
 
-void display_update(ucom4cpu *cpu) {
+
+void ucom4_display_update(ucom4cpu *cpu)
 {
 	uint32_t active_state[0x20];
 	uint32_t ds;
 	int y,x;
 	int mul;
+
+	// handle decay
+
+	while(cpu->decay_ticks >=220) {
+		cpu->decay_ticks -=220;
+		ucom4_display_decay(cpu);
+	}
 	for (int y = 0; y < cpu->display_maxy; y++)
 	{
 		active_state[y] = 0;
@@ -137,7 +159,7 @@ void display_update(ucom4cpu *cpu) {
 		{
 			// turn on powered segments
 			if (cpu->display_state[y] >> x & 1)
-				cpu->display_decay[y][x] = m_display_wait;
+				cpu->display_decay[y][x] = cpu->display_wait;
 
 			// determine active state
 			ds = (cpu->display_decay[y][x] != 0) ? 1 : 0;
@@ -145,60 +167,95 @@ void display_update(ucom4cpu *cpu) {
 		}
 	}
 
-	// on difference, send to output
-	for (y = 0; y < cpu->display_maxy; y++)
-		if (cpu->display_cache[y] != active_state[y])
-		{
-			// if (cpu->display_segmask[y] != 0)
-			// 	output().set_digit_value(y, active_state[y] & m_display_segmask[y]);
+// 	// on difference, send to output
+// 	for (y = 0; y < cpu->display_maxy; y++) {
+// 		if (cpu->display_cache[y] != active_state[y])
+// 		{
+// 			// if (cpu->display_segmask[y] != 0)
+// 			// 	output().set_digit_value(y, active_state[y] & m_display_segmask[y]);
 
-			mul = (cpu->display_maxx <= 10) ? 10 : 100;
-			for (int x = 0; x <= cpu->display_maxx; x++)
-			{
-				int state = active_state[y] >> x & 1;
-				char buf1[0x10]; // lampyx
-				char buf2[0x10]; // y.x
+// 			mul = (cpu->display_maxx <= 10) ? 10 : 100;
+// 			for (int x = 0; x <= cpu->display_maxx; x++)
+// 			{
+// 				int state = active_state[y] >> x & 1;
+// 				char buf1[0x10]; // lampyx
+// 				char buf2[0x10]; // y.x
 
-				if (x == cpu->display_maxx)
-				{
-					// always-on if selected
-					sprintf(buf1, "lamp%da", y);
-					sprintf(buf2, "%d.a", y);
-				}
-				else
-				{
-					sprintf(buf1, "lamp%d", y * mul + x);
-					sprintf(buf2, "%d.%d", y, x);
-				}
-				// output().set_value(buf1, state);
-				// output().set_value(buf2, state);
-			}
-		}
-
+// 				if (x == cpu->display_maxx)
+// 				{
+// 					// always-on if selected
+// 					sprintf(buf1, "lamp%da", y);
+// 					sprintf(buf2, "%d.a", y);
+// //					printf("%s=%d %s=%d\n",buf1, state, buf2, state);
+// 				}
+// 				else
+// 				{
+// 					sprintf(buf1, "lamp%d", y * mul + x);
+// 					sprintf(buf2, "%d.%d", y, x);
+// 				}
+// 				// output().set_value(buf1, state);
+// 				// output().set_value(buf2, state);
+// //				printf("[%d] ",state);
+// 			}
+// //			printf("\n");
+// 		}
+// //		printf("\n");
+// 	}
 	memcpy(cpu->display_cache, active_state, sizeof(cpu->display_cache));
+}
+
+
+void ucom4_display_decay(ucom4cpu *cpu) {
+	int x,y;
+
+	for (y = 0; y < cpu->display_maxy; y++)
+		for (x = 0; x <= cpu->display_maxx; x++)
+			if (cpu->display_decay[y][x] != 0)
+				cpu->display_decay[y][x]--;
+
+//	display_update(cpu);
+
+}
+
+
+void set_display_size(ucom4cpu *cpu, int maxx, int maxy)
+{
+	cpu->display_maxx = maxx;
+	cpu->display_maxy = maxy;
 }
 
 void display_matrix(ucom4cpu *cpu, int maxx, int maxy, int setx, int sety) {
 	uint32_t mask = (1 << maxx) - 1;
 	int y,x;
-	printf("DISPLAY DATA: \n");
-	for (y = 0; y < maxy; y++) {
+	set_display_size(cpu, maxx, maxy);
+
+	// update current state
+	for (y = 0; y < maxy; y++)
 		cpu->display_state[y] = (sety >> y & 1) ? ((setx & mask) | (1 << maxx)) : 0;
-		for (x=16;x>=0;x--) {
-			printf("[%d]",(cpu->display_state[y]&1<<x) ? 1:0);
-		}
-		printf("\n");
 
-	}
+	// printf("DISPLAY DATA: \n");
+	// for (y = 0; y < maxy; y++) {
+	// 	cpu->display_state[y] = (sety >> y & 1) ? ((setx & mask) | (1 << maxx)) : 0;
+	// 	for (x=16;x>=0;x--) {
+	// 		printf("[%d]",(cpu->display_state[y]&1<<x) ? 1:0);
+	// 	}
+	// 	printf("\n");
 
-//	if (update)
-//		display_update();
+	// }
+
+//	if (update) {
+		ucom4_display_update(cpu);
+//		update = 0;
+//	}
 
 }
 
 void prepare_display(ucom4cpu *cpu) {
 	uint16_t grid = BITSWAP16(cpu->grid,15,14,13,12,11,10,0,1,2,3,4,5,6,7,8,9);
 	uint16_t plate = BITSWAP16(cpu->plate,15,3,2,6,1,5,4,0,11,10,7,12,14,13,8,9);
+
+	// grid = cpu->grid;
+	// plate = cpu->plate;
 	
 //	printf("GRID: %04X PLATE: %04X\n", plate, grid);
 	display_matrix(cpu, 15, 10, plate, grid);
@@ -209,8 +266,12 @@ void output_w(ucom4cpu *cpu, int index, uint8_t data)
 {
 	index &= 0xf;
 	data &= 0xf;
+
 	int shift;
 
+	if(index == NEC_UCOM4_PORTI)
+		data &=0x7;
+	
 /*	switch (index)
 	{
 		case NEC_UCOM4_PORTC: m_write_c(index, data, 0xff); break;
@@ -237,7 +298,7 @@ void output_w(ucom4cpu *cpu, int index, uint8_t data)
 	// C,D,E01: vfd matrix grid
 			shift = (index - NEC_UCOM4_PORTC) * 4;
 			cpu->grid = (cpu->grid & ~(0xf << shift)) | (data << shift);
-//			printf("GRID: %d\n", cpu->grid);
+			prepare_display(cpu);
 			break;
 
 		case NEC_UCOM4_PORTF:
@@ -247,17 +308,20 @@ void output_w(ucom4cpu *cpu, int index, uint8_t data)
 //			printf("OUTPUT GRID: [%d][%d]\n",index,data);
 			shift = (index - NEC_UCOM4_PORTF) * 4;
 			cpu->plate = (cpu->plate & ~(0xf << shift)) | (data << shift);
-//			prepare_display();
+			prepare_display(cpu);
 //			printf("PLATE: %d\n", cpu->plate);
+			break;
+		default:
+			printf("Write to unknown port: %d\n",index);
 			break;
 
 	}
-//	if(index == NEC_UCOM4_PORTE) {
-//		printf("OUTPUT_W: PORT[%d] BIT[%d]\n",index, data >> 3 &1);
-//	}
+	// if(index == NEC_UCOM4_PORTE) {
+	// 	printf("OUTPUT_W: PORT[%d] BIT[%d]\n",index, data >> 3 &1);
+	// }
 	cpu->port_out[index] = data;
-	cpu->port_out_buf[index] |= data;
-	prepare_display(cpu);
+//	cpu->port_out_buf[index] |= data;
+//	prepare_display(cpu);
 }
 
 
@@ -1087,6 +1151,7 @@ int32_t ucom4_exec(ucom4cpu *cpu, int32_t ticks) {
 		tickused   = cpu->old_icount - cpu->icount;
 		ticks      -= tickused;
 		totalticks += tickused;
+		cpu->decay_ticks += tickused;
 
 		if( cpu->tc > 0 ) {
 			cpu->tc -= tickused;

@@ -86,17 +86,25 @@ typedef struct _ucom4cpu {
 	int icount;
 	int old_icount;
 	uint8_t inp_mux ;
-	uint8_t grid;
-	uint8_t plate;
-	uint32_t display_state[0x20];       // display matrix rows data (last bit is used for always-on)
+
+	uint32_t grid;
+	uint32_t plate;
+
 	int display_wait;                 // led/lamp off-delay in microseconds (default 33ms)
 	int display_maxy;                 // display matrix number of rows
 	int display_maxx;                 // display matrix number of columns (max 31 for now)
 
+	uint32_t display_state[0x20];       // display matrix rows data (last bit is used for always-on)
+	uint16_t display_segmask[0x20];     // if not 0, display matrix row is a digit, mask indicates connected segments
+	uint32_t display_cache[0x20];       // (internal use)
+	uint32_t display_decay[0x20][0x20];  // (internal use)
+	int decay_ticks;
 
 } ucom4cpu;
 
 void ucom4_reset(ucom4cpu *cpu);
 int32_t ucom4_exec(ucom4cpu *cpu, int32_t ticks);
+void ucom4_display_decay(ucom4cpu *cpu);
+void ucom4_display_update(ucom4cpu *cpu);
 
 #endif

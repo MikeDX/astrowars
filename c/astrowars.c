@@ -42,7 +42,7 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 
 int main(int argc, char *argv[])
 {
-	int x;
+	int x,y;
 	int totalticks = 0;
 	ucom4_reset(&cpu);
 	if(load_rom(&cpu, "astrowars.rom", 0x800)!=0x800) {
@@ -51,8 +51,8 @@ int main(int argc, char *argv[])
 	while(cpu.pc<0x800) {
 //		ucom4_exec(&cpu, 400000/60);
 //		printf("%d\n",ucom4_exec(&cpu, 1));//400000/60));
-		totalticks +=ucom4_exec(&cpu, 40000/60);
-//		totalticks +=ucom4_exec(&cpu, 1);
+		totalticks +=ucom4_exec(&cpu, 400000/60);
+//		totalticks +=ucom4_exec(&cpu, 220);
 /*		printf("PC: %02X TC: %d  TT: %d   \n",cpu.rom[cpu.pc],cpu.tc, totalticks);
 		for(x=0;x<0x80;x++) {
 			printf("%X ",cpu.ram[x]);
@@ -61,12 +61,23 @@ int main(int argc, char *argv[])
 		}
 		printf("Stack: %02X %02X %02X %02X \n",cpu.pc, cpu.stack[0], cpu.stack[0],cpu.stack[1]);
 */
-		printf("OUTPUT: ");
-		for(x=0;x<16;x++) {
-			printf("%2X ",cpu.port_out_buf[x]);
-			cpu.port_out_buf[x]=0;
+		// printf("OUTPUT: ");
+		// for(x=0;x<16;x++) {
+		// 	printf("%2X ",cpu.port_out_buf[x]);
+		// 	cpu.port_out_buf[x]=0;
+		// }
+		// printf("\r");
+
+//		ucom4_display_decay(&cpu);
+
+		ucom4_display_update(&cpu);		
+		for(x=0;x<cpu.display_maxy;x++) {
+			for(y=cpu.display_maxx-1;y>=0;y--) {
+				printf("%d",(cpu.display_cache[x]&1<<y)?1:0);
+			}
+			printf("\n");
 		}
-		printf("\r");
+		printf("\n");
 	}
 	return 0;
 }
