@@ -11,6 +11,8 @@
 #include "ucom4_cpu.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+
 
 #define false 0
 #define true  1
@@ -131,7 +133,7 @@ uint8_t input_r(ucom4cpu *cpu, int index)
 			//printf("Reading input port[%d]\n",index);
 			break;
 	}
-//	inp = 0xf;
+	inp = rand()*15;
 	return inp & 0xf;
 }
 
@@ -144,11 +146,12 @@ void ucom4_display_update(ucom4cpu *cpu)
 	uint32_t ds;
 	int y,x;
 	int mul;
+	int decay_time = 80;
 
 	// handle decay
 
-	while(cpu->decay_ticks >=220) {
-		cpu->decay_ticks -=220;
+	while(cpu->decay_ticks >= decay_time) {
+		cpu->decay_ticks -= decay_time;
 		ucom4_display_decay(cpu);
 	}
 	for (int y = 0; y < cpu->display_maxy; y++)
