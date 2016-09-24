@@ -17,6 +17,10 @@
 #define false 0
 #define true  1
 
+int audiosize = 10240;
+uint8_t audiobuf[10240];
+int aindex = 0;
+
 void ucom4_reset(ucom4cpu *cpu) {
 	cpu->pc         = 0;
 	cpu->tc         = 0;
@@ -50,6 +54,8 @@ void ucom4_reset(ucom4cpu *cpu) {
 	cpu->grid = 0;
 	cpu->display_wait = 33;
 	cpu->decay_ticks = 0;
+	cpu->totalticks = 0;
+	cpu->audio_avail = 0;
 }
 
 void do_interrupt(void) {
@@ -107,6 +113,8 @@ void push_stack(ucom4cpu *cpu)
 	cpu->stack[0] = cpu->pc;
 }
 
+extern uint8_t inputs[5];
+
 uint8_t input_r(ucom4cpu *cpu, int index)
 {
 	index &= 0xf;
@@ -127,13 +135,26 @@ uint8_t input_r(ucom4cpu *cpu, int index)
 	switch (index)
 	{
 		case NEC_UCOM4_PORTA:
+			// PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 )
+			// PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY
+			// PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY
+			// PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNUSED )
+
+			inp = inputs[2]<<2|inputs[1]<<1|inputs[0];
+
 			break;
 		case NEC_UCOM4_PORTB:
+			// PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SELECT )
+			// PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_START )
+			// PORT_BIT( 0x0c, IP_ACTIVE_HIGH, IPT_UNUSED )
+
+			inp = inputs[4]<<1|inputs[3];
+
 //			inp = 0x1;
 			//printf("Reading input port[%d]\n",index);
 			break;
 	}
-	inp = rand()*15;
+//	inp = rand()*15;
 	return inp & 0xf;
 }
 
@@ -265,6 +286,27 @@ void prepare_display(ucom4cpu *cpu) {
 
 }
 
+FILE *sound_out = 0;
+
+void level_w(ucom4cpu *cpu, uint8_t data) {
+	data *=255;
+	cpu->audio_level = data;
+
+//	printf("%d %d\n", cpu->totalticks, data);
+
+	// int x = 0;
+	// //printf("Data: %d\n",data);
+	// for(x=0;x<8;x++) {
+	// 	audiobuf[aindex]=data*255;
+	// 	aindex++;
+		
+	// 	if( aindex >= audiosize ) {
+	// 		aindex = 0;
+	// 		printf("Buffer filled, looping\n");
+	// 	}
+	// }
+}
+
 void output_w(ucom4cpu *cpu, int index, uint8_t data)
 {
 	index &= 0xf;
@@ -295,10 +337,10 @@ void output_w(ucom4cpu *cpu, int index, uint8_t data)
 		case NEC_UCOM4_PORTD:
 		case NEC_UCOM4_PORTE:
 		// E3: speaker out
-//	if (offset == NEC_UCOM4_PORTE)
-//		m_speaker->level_w(data >> 3 & 1);
+		if (index == NEC_UCOM4_PORTE)
+			level_w(cpu, data >> 3 & 1);
 
-	// C,D,E01: vfd matrix grid
+			// C,D,E01: vfd matrix grid
 			shift = (index - NEC_UCOM4_PORTC) * 4;
 			cpu->grid = (cpu->grid & ~(0xf << shift)) | (data << shift);
 			prepare_display(cpu);
@@ -1016,6 +1058,27 @@ void op_di(ucom4cpu *cpu)
 
 
 
+void sound_buf(ucom4cpu *cpu) {
+	// if(cpu->sound_ticks > 400000/22050) {
+	// 	cpu->sound_ticks -=400000/22050;
+	// }
+
+	// if(!sound_out) {
+	// 	sound_out = fopen("sound.raw","wb");
+	// }
+
+	#define interval 8
+
+	if(cpu->sound_ticks >= interval) {
+//		printf("Filling audio: %d %d %d\n",aindex, cpu->totalticks, cpu->sound_ticks);
+		audiobuf[cpu->aindex]=cpu->audio_level;
+		cpu->aindex++;
+		cpu->audio_avail++;
+		if(cpu->aindex>=10240) cpu->aindex=0;
+		cpu->sound_ticks -=interval;
+	}
+//	fwrite(&cpu->audio_level, 1, 1, sound_out);
+}
 
 
 
@@ -1155,6 +1218,10 @@ int32_t ucom4_exec(ucom4cpu *cpu, int32_t ticks) {
 		ticks      -= tickused;
 		totalticks += tickused;
 		cpu->decay_ticks += tickused;
+		cpu->sound_ticks += tickused;
+		cpu->totalticks += tickused;
+
+		sound_buf(cpu);
 
 		if( cpu->tc > 0 ) {
 			cpu->tc -= tickused;

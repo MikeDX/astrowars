@@ -99,6 +99,11 @@ typedef struct _ucom4cpu {
 	uint32_t display_cache[0x20];       // (internal use)
 	uint32_t display_decay[0x20][0x20];  // (internal use)
 	int decay_ticks;
+	uint8_t audio_level;
+	int sound_ticks;
+	int totalticks;
+	int aindex;
+	int audio_avail;
 
 } ucom4cpu;
 

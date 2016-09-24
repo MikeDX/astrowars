@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <math.h>
+#include <sys/time.h>
+
 #include "astrowars.h"
 
 #ifdef __EMSCRIPTEN__
@@ -34,8 +37,9 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 {
 	FILE *f;
 	int len;
+	int result;
 
-	f=fopen("astrowars.rom","rb");
+	f=fopen(file,"rb");
 	
 	if(!f) {
 		printf("Failed to open rom [%s]\n", file);
@@ -51,7 +55,7 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 	}
 	fseek(f, 0, SEEK_SET);
 
-	fread(cpu->rom,1,len,f);
+	result = fread(cpu->rom,1,len,f);
 
 	fclose(f);
 	return len;	
@@ -242,12 +246,39 @@ void display_update(void) {
 int totalticks = 0;
 int running = 1;
 
+struct timeval tv;
+static long ms = 0;
+static long next_ms = 0;
+SDL_Event event;
+
+unsigned long long get_ms() {
+	gettimeofday(&tv, NULL);
+	unsigned long long millisecondsSinceEpoch =
+    (unsigned long long)(tv.tv_sec) * 1000 +
+    (unsigned long long)(tv.tv_usec) / 1000;
+    return millisecondsSinceEpoch;
+}
+
+uint8_t inputs[5];
+
 void mainloop(void) {
-	SDL_Event event;
+
+	uint8_t bit;
+	ms = get_ms();
+
+//	printf("%lu %lu\n",ms, next_ms);
+
+	if( ms >= next_ms )
+		next_ms += 1000/60;
+	else
+		return;
+
+
+	//int ticks = 0;
 //printf("mainloop\n");
 //		ucom4_exec(&cpu, 400000/60);
 //		printf("%d\n",ucom4_exec(&cpu, 1));//400000/60));
-		totalticks +=ucom4_exec(&cpu, 400000/120);
+		totalticks +=ucom4_exec(&cpu, 400000/284);
 //		totalticks +=ucom4_exec(&cpu, 220);
 //		printf("PC: %02X TC: %d  TT: %d   \n",cpu.rom[cpu.pc],cpu.tc, totalticks);
 /*		for(x=0;x<0x80;x++) {
@@ -270,7 +301,37 @@ void mainloop(void) {
 
 #ifdef HAS_SDL
 		while(SDL_PollEvent( &event)) {
+			bit = 0;
+			if(event.type == SDL_KEYDOWN)
+				bit=1;
+
 			switch( event.type ) {
+
+				case SDL_KEYDOWN:
+				case SDL_KEYUP:
+					switch(event.key.keysym.sym) {
+
+						case SDLK_SPACE: // FIRE
+							inputs[0]=bit;
+							break;
+
+						case SDLK_LEFT: // LEFT
+							inputs[1]=bit;
+							break;
+
+						case SDLK_RIGHT: // RIGHT
+							inputs[2]=bit;
+							break;
+
+						case SDLK_2: // SELECT
+							inputs[3]=bit;
+							break;
+
+						case SDLK_1: // START
+							inputs[4]=bit;
+							break;
+					}
+					break;
 				case SDL_QUIT:
 					running = 0;
 					break;
@@ -292,28 +353,115 @@ void mainloop(void) {
 
 
 }
+
+static uint8_t *audio_chunk;
+static uint32_t audio_len;
+static uint8_t *audio_pos;
+
+extern uint8_t audiobuf[1024];
+extern int aindex;
+extern int audiosize;
+
+SDL_AudioSpec wanted;
+int a  = 0;
+int last_a = 0;
+
+void fill_audio(void *udata, Uint8 *stream, int len)
+{
+
+	double Hz = 50;
+	double pi = 3.1415; 
+	double SR = 22050; 
+	double F=2*pi*Hz/SR;
+
+	uint8_t soundbuf[1024];
+	int z;
+
+	// if(cpu.aindex < last_a) {
+	// 	// index has looped since we checked
+	// 	audio_len = 8192-a+cpu.aindex;
+	// } else {
+	// 	audio_len = cpu.aindex -a;
+	// }
+
+	audio_len = cpu.audio_avail;
+
+
+
+        /* Mix as much data as possible */
+        len = ( len > audio_len ? audio_len : len );
+
+        /* Only play if we have data left */
+        // if ( audio_len == 0 )
+        //     return;
+//		printf("cpu.audio_level: %d\n",cpu.audio_level);
+
+//		printf("audio buf: %d audio pos: %d\n",a, cpu.aindex);
+    	for(z=0;z<len;z++) {
+			stream[z] = audiobuf[a];//(rand()*1)*255;//(uint8_t)audiobuf[a];//*sin(F*(double)z); 
+			a++;
+			if(a>=10240)
+				a=0;
+    	}
+
+    	cpu.audio_avail -= len;
+//    	printf("Filling audio stream %d\n", len);
+
+//        SDL_MixAudio(stream, soundbuf, len, SDL_MIX_MAXVOLUME);
+        audio_pos += len;
+        audio_len -= len;
+//		printf("Audio reserve: %d\n",cpu.audio_avail);
+
+}
+
+int init_sound(void) {
+
+    /* Set the audio format */
+    wanted.freq = 11025;
+    wanted.format = AUDIO_U8;
+    wanted.channels = 1;    /* 1 = mono, 2 = stereo */
+    wanted.samples = 256;   /* Good low-latency value for callback */
+    wanted.callback = fill_audio;
+    wanted.userdata = NULL;
+
+    /* Open the audio device, forcing the desired format */
+    if ( SDL_OpenAudio(&wanted, NULL) < 0 ) {
+        fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
+        return(-1);
+    }
+    printf("Opened sound\n");
+
+    return(0);
+}
+
+
 int main(int argc, char *argv[])
 {
 	int x,y;
 #ifdef HAS_SDL
 
-	SDL_Init(SDL_INIT_EVERYTHING);
+	SDL_Init(SDL_INIT_EVERYTHING | SDL_INIT_AUDIO);
 	screen = SDL_SetVideoMode(193,684,32,SDL_HWSURFACE);
 	setup_gfx();
+	init_sound();
 
 #endif
+
+	next_ms = get_ms();
+	//round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
 
 	ucom4_reset(&cpu);
 	if(load_rom(&cpu, "astrowars.rom", 0x800)!=0x800) {
 		printf("Failed to load astrowars.rom\n");
 		return -1;
 	}
+	SDL_PauseAudio(0);
 #ifdef __EMSCRIPTEN__
 	emscripten_set_main_loop(mainloop,60,0);
 #else
 	while(running) {
 		mainloop();
-		usleep(10000000/200);
+//		usleep(10000000/282);
 	}
 	SDL_Quit();
 #endif
