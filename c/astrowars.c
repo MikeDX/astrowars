@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
 #include <sys/time.h>
 
@@ -28,8 +29,10 @@ int gfx_x[10][15];
 int gfx_y[10][15];
 
 SDL_Surface *gfx[10][15];
-
+SDL_Surface *bg;
 #endif
+
+#define MAX_EVENTS 65535
 
 ucom4cpu cpu;
 
@@ -201,7 +204,7 @@ void setup_gfx(void) {
 	gfx_x[9][14] =  40;    gfx_y[9][14] = 625;
 
 
-
+	
 	for(x=0;x<15;x++) {
 		for(y=0;y<10;y++) {
 			sprintf(filename,"data/gfx/%d.%d.png",y,x);
@@ -216,15 +219,54 @@ void setup_gfx(void) {
 			}	
 		}
 	}
+	
+	bg=IMG_Load("data/gfx/bg3.png");		
 
 	SDL_Flip(screen);
 }
+
+uint8_t inputs[5];
+
+uint8_t input_data;
+uint8_t old_input_data;
+
+struct input_event {
+  uint32_t cycle;
+  uint8_t val;
+} events[MAX_EVENTS], *pevent = NULL;
 
 void display_update(void) {
 	int x,y;
 	SDL_Rect rect;
 
-	SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0,0,0));
+	input_data = 0;
+	for (x=0;x<5;x++) {
+		input_data |= inputs[x]<<x;
+	}
+
+	if(!pevent && input_data!=old_input_data)
+		printf("%08x %02x\n", cpu.totalticks, input_data);
+
+	old_input_data = input_data;
+
+	if(pevent) {
+		if (cpu.totalticks >= pevent->cycle) {
+			for(x=0;x<5;x++) {
+				inputs[x]=(pevent->val & (1<<x)) ? 1:0;
+	//			printf("Input: %d %d\n",x,inputs[x]);
+			}
+			++pevent;
+		}
+	}
+
+	if(pevent && !pevent->cycle) {
+		printf("Playback ended\n");
+		pevent = NULL;
+//		exit(0);
+	}
+
+//	SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0,0,0));
+	SDL_BlitSurface(bg, NULL, screen, NULL);
 	for(x=0;x<15;x++) {
 		for(y=0;y<10;y++) {
 			if(gfx[y][x] && (cpu.display_cache[y]&1<<x)) {
@@ -259,19 +301,18 @@ unsigned long long get_ms() {
     return millisecondsSinceEpoch;
 }
 
-uint8_t inputs[5];
 
 void mainloop(void) {
 
 	uint8_t bit;
 	ms = get_ms();
-
+	int x = 0;
 //	printf("%lu %lu\n",ms, next_ms);
 
-	if( ms >= next_ms )
+	if( ms >= next_ms ) {
 		next_ms += 1000/60;
-	else
-		return;
+	
+//		return;
 
 
 	//int ticks = 0;
@@ -309,27 +350,29 @@ void mainloop(void) {
 
 				case SDL_KEYDOWN:
 				case SDL_KEYUP:
-					switch(event.key.keysym.sym) {
+					if(!pevent) {
+						switch(event.key.keysym.sym) {
 
-						case SDLK_SPACE: // FIRE
-							inputs[0]=bit;
-							break;
+							case SDLK_SPACE: // FIRE
+								inputs[0]=bit;
+								break;
 
-						case SDLK_LEFT: // LEFT
-							inputs[1]=bit;
-							break;
+							case SDLK_LEFT: // LEFT
+								inputs[1]=bit;
+								break;
 
-						case SDLK_RIGHT: // RIGHT
-							inputs[2]=bit;
-							break;
+							case SDLK_RIGHT: // RIGHT
+								inputs[2]=bit;
+								break;
 
-						case SDLK_2: // SELECT
-							inputs[3]=bit;
-							break;
+							case SDLK_2: // SELECT
+								inputs[3]=bit;
+								break;
 
-						case SDLK_1: // START
-							inputs[4]=bit;
-							break;
+							case SDLK_1: // START
+								inputs[4]=bit;
+								break;
+						}
 					}
 					break;
 				case SDL_QUIT:
@@ -337,7 +380,10 @@ void mainloop(void) {
 					break;
 			}
 		}
-		display_update();
+	}
+
+
+	display_update();
 #else
 		for(x=0;x<cpu.display_maxy;x++) {
 			for(y=cpu.display_maxx-1;y>=0;y--) {
@@ -369,20 +415,7 @@ int last_a = 0;
 void fill_audio(void *udata, Uint8 *stream, int len)
 {
 
-	double Hz = 50;
-	double pi = 3.1415; 
-	double SR = 22050; 
-	double F=2*pi*Hz/SR;
-
-	uint8_t soundbuf[1024];
 	int z;
-
-	// if(cpu.aindex < last_a) {
-	// 	// index has looped since we checked
-	// 	audio_len = 8192-a+cpu.aindex;
-	// } else {
-	// 	audio_len = cpu.aindex -a;
-	// }
 
 	audio_len = cpu.audio_avail;
 
@@ -417,10 +450,10 @@ void fill_audio(void *udata, Uint8 *stream, int len)
 int init_sound(void) {
 
     /* Set the audio format */
-    wanted.freq = 11025;
+    wanted.freq = 44100;
     wanted.format = AUDIO_U8;
     wanted.channels = 1;    /* 1 = mono, 2 = stereo */
-    wanted.samples = 256;   /* Good low-latency value for callback */
+    wanted.samples = 2048;   /* Good low-latency value for callback */
     wanted.callback = fill_audio;
     wanted.userdata = NULL;
 
@@ -444,6 +477,26 @@ int main(int argc, char *argv[])
 	screen = SDL_SetVideoMode(193,684,32,SDL_HWSURFACE);
 	setup_gfx();
 	init_sound();
+	memset(audiobuf,0,sizeof(audiobuf));
+
+	if(argc>1) {
+		FILE *f = fopen(argv[1],"r");
+		if(!f) {
+			printf("Cannot open replay file\n");
+			return (-1);
+		}
+
+    	for ( pevent = events ; 2 == fscanf(f, "%x %hhx", &(pevent->cycle), &(pevent->val)) ; pevent++ );
+	
+    	fclose(f);
+
+    	printf("replaying %lu events\n", pevent - events);
+    	pevent->cycle = 0;
+    	pevent = events;
+    	argc--,
+    	argv++;
+
+	}
 
 #endif
 

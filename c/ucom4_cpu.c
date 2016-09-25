@@ -1068,13 +1068,19 @@ void sound_buf(ucom4cpu *cpu) {
 	// }
 
 	#define interval 8
-
+	int x = 0;
 	if(cpu->sound_ticks >= interval) {
 //		printf("Filling audio: %d %d %d\n",aindex, cpu->totalticks, cpu->sound_ticks);
-		audiobuf[cpu->aindex]=cpu->audio_level;
-		cpu->aindex++;
-		cpu->audio_avail++;
-		if(cpu->aindex>=10240) cpu->aindex=0;
+
+		for(x=0;x<4;x++) {
+			audiobuf[cpu->aindex]=cpu->audio_level;
+			cpu->aindex++;
+			cpu->audio_avail++;
+
+			if(cpu->aindex>=10240) 
+				cpu->aindex=0;
+		}
+		
 		cpu->sound_ticks -=interval;
 	}
 //	fwrite(&cpu->audio_level, 1, 1, sound_out);
