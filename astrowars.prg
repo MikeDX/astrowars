@@ -38,7 +38,7 @@ ram[255];
 //registers[8];
 
 real_op = 0;
-readport = 0;
+//readport = 0;
 // CPU definition
 d = false;
 bp = -1;
@@ -183,9 +183,9 @@ for(y=0;y<10;y++)
 
 ram[x+y*16]=x+y*16;
 write_int(0,10+x*20,100+y*10,1,
-//&vfd[x].y[y]);
+&vfd[x].y[y]);
 //cpu.display_decay[y].x[x]);
-&ram[x+y*16]);//&ram[x+(y*16)]);
+//&ram[x+y*16]);//&ram[x+(y*16)]);
 end
 end
 
@@ -197,6 +197,7 @@ end // debug info
 
 
 // SETUP GRAPHS
+// GRID 0
 // DIGIT 1
 VFD_Element(0,0,108,19,-1);
 VFD_Element(0,1,98,13,-1);
@@ -215,6 +216,7 @@ VFD_Element(0,9,88-39,40,-1);
 VFD_Element(0,13,108-39,40,-1);
 VFD_Element(0,14,98-39,49,-1);
 
+// GRID 1
 // DIGIT 3
 VFD_Element(1,0,108+86,19,-1);
 VFD_Element(1,1,98+86,13,-1);
@@ -232,6 +234,61 @@ VFD_Element(1,12,98-39+86,29,-1);
 VFD_Element(1,9,88-39+86,40,-1);
 VFD_Element(1,13,108-39+86,40,-1);
 VFD_Element(1,14,98-39+86,49,-1);
+
+
+// GRID 2
+// BULLETS
+VFD_Element(2,0,153,121,-1);
+VFD_Element(2,1,184,121,200);
+VFD_Element(2,6,121,121,200);
+VFD_Element(2,7,90,121,200);
+VFD_Element(2,4,59,121,200);
+
+// MOTHERSHIPS
+VFD_Element(2,3,59,102,-1);
+VFD_Element(2,14,90,102,203);
+VFD_Element(2,13,121,102,203);
+VFD_Element(2,11,152,102,203);
+VFD_Element(2,8,183,102,203);
+
+// ALIENS
+VFD_Element(2,2,59,140,-1);
+VFD_Element(2,5,90,140,-1);
+VFD_Element(2,12,121,140,202);
+VFD_Element(2,10,152,140,205);
+VFD_Element(2,9,183,140,202);
+
+
+// GRID 3
+// BULLETS
+VFD_Element(3,3,59,175,-1);
+VFD_Element(3,14,90,175,303);
+VFD_Element(3,13,121,175,303);
+VFD_Element(3,11,152,175,303);
+VFD_Element(3,8,183,175,303);
+
+// ALIENS
+VFD_Element(3,2,59,196,205);
+VFD_Element(3,5,90,196,202);
+VFD_Element(3,12,121,196,205);
+VFD_Element(3,10,152,196,202);
+VFD_Element(3,9,183,196,205);
+
+
+
+// GRID 9
+//PLAYER TOPs
+VFD_Element(9,2,56,544,-1);
+VFD_Element(9,5,87,544,902);
+VFD_Element(9,12,118,544,902);
+VFD_Element(9,10,149,544,902);
+VFD_Element(9,9,180,544,902);
+
+VFD_Element(9,4,55,570,-1);
+VFD_Element(9,7,86,570,904);
+VFD_Element(9,6,117,570,904);
+VFD_Element(9,0,148,570,904);
+VFD_Element(9,1,179,570,904);
 
 
 x=110;
@@ -1127,39 +1184,49 @@ BYTE inp;
 
 BEGIN
 
-    readport = port;
+    port &=0xf;
+
+    //readport = port;
     inp = 0;
 
     switch(port)
         case NEC_UCOM4_PORTA:
             if(key(_space))
-                inp+=1;
+                inp |= 1;
             end
 
             if(key(_left))
-                inp+=2;
+                inp |= 1<<1;
             end
 
             if(key(_right))
-                inp+=4;
+                inp |= 1<<2;
             end
 
+            return(inp&0xf);
         end
 
         case NEC_UCOM4_PORTB:
             if(key(_2))
-                inp+=1;
+                inp |= 1;
             end
 
             if(key(_1))
-                inp+=2;
+                inp |= 1<<1;
             end
 
+            return(inp&0xf);
+
+        end
+
+        default:
+            DEBUG;
         end
 
     end
 
-    return (inp&0xf);//cpu.m_port_out[port]);
+    // never get here
+    return (0);//inp&0xf);//cpu.m_port_out[port]);
 
 END
 
@@ -1987,7 +2054,7 @@ function op_tpb()
 // CHECKED
 BEGIN
 
-    cpu.skip = (( input_r(cpu.dpl) & cpu.bitmask )!=0 );
+    cpu.skip = (( input_r(cpu.dpl) & cpu.bitmask ) !=0 );
 END
 
 
@@ -1996,7 +2063,7 @@ function op_tpa()
 // CHECKED
 BEGIN
 
-    cpu.skip = ((ram_r() & cpu.bitmask) !=0);
+    cpu.skip = (( input_r(NEC_UCOM4_PORTA) & cpu.bitmask) !=0);
 
 END
 
