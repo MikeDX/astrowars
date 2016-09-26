@@ -501,7 +501,9 @@ WHILE(cpu.icount>0)
     // MAIN OPCODE LOOP
     SWITCH(cpu.op & 0xf0)
 
-        CASE 0x80:      op_ldz();   END
+        CASE 0x80:
+            op_ldz();
+        END
 
         case 0x90:
             op_li();
@@ -828,39 +830,42 @@ WHILE(cpu.icount>0)
         end
     end
 
+    // CHECK HOW MANY TICKS WE USED FOR THIS OPCODE
     curticks = (cpu.old_icount - cpu.icount);
 
+    // INCREMENT TOTALTICK COUNTER
     cpu.totalticks += curticks;
+
+    // INCREMENT DECAY TICK COUNTER
     cpu.decay_ticks += curticks;
 
+    // CHECK TIMER
     if(cpu.timer_f == 0)
 
-        // decrement timercount by ticks on this opcode
+        // REDUCE TIMER COUNTER BY TICKS USED
         cpu.tc -= curticks;
 
         if(cpu.tc<0)
             cpu.tc = 0;
         end
 
+        // IF TIMER FINISHED, SET FLAG
         if(cpu.tc == 0)
-            // set timer flag to 1
             cpu.timer_f = 1;
         end
 
     end
 
+    // UPDATE DEBUG INFO
     if(false)
-    dbg.pc = int2hex(cpu.pc);
-    dbg.dp = int2hex(cpu.dph << 4 | cpu.dpl);
+        dbg.pc = int2hex(cpu.pc);
+        dbg.dp = int2hex(cpu.dph << 4 | cpu.dpl);
 
-    dbgstack0=int2hex(cpu.stack[0]);
-    dbgstack1=int2hex(cpu.stack[1]);
-    dbgstack2=int2hex(cpu.stack[2]);
-    dbgstack3=int2hex(cpu.stack[3]);
+        dbgstack0=int2hex(cpu.stack[0]);
+        dbgstack1=int2hex(cpu.stack[1]);
+        dbgstack2=int2hex(cpu.stack[2]);
+        dbgstack3=int2hex(cpu.stack[3]);
     end
-
-    //dbg.pc[0]="a";
-    //dbg.pc[1]="b";
 
     if(key(_esc) || cpu.totalticks == bp)
         d = true;
@@ -897,6 +902,8 @@ END
 
 END
 
+
+// HELPERS TO CONVERT INT TO HEX (STRING) VALUES
 function int2hex(INT val)
 
 PRIVATE
@@ -908,7 +915,6 @@ INT high;
 INT low;
 
 begin
-    return (itoa(val));
 
     high = val >> 8;
     low = val &0xFF;
@@ -937,7 +943,6 @@ STRING str;
 STRING strh;
 STRING strl;
 BEGIN
-    return (itoa(val));
 
     high = val >> 4;
     low = val &0xf;
@@ -1000,8 +1005,12 @@ BEGIN
 
 end
 
-// ram rw
 
+
+
+// RAM FUNCTIONS
+
+// RAM WRITE
 function ram_w(value)
 
 PRIVATE
@@ -1013,15 +1022,10 @@ BEGIN
     addr = cpu.dph << 4 | cpu.dpl;
     cpu.ram[addr & cpu.datamask]=value&0xf;
     ram[addr & cpu.datamask]=value&0xf;
-/*
-    if(value!=0)
-        d = true;
-        DEBUG;
-    end
-
-*/
 END
 
+
+// RAM READ
 function ram_r()
 
 PRIVATE
@@ -1031,14 +1035,13 @@ WORD addr;
 BEGIN
 
     addr = cpu.dph << 4 | cpu.dpl;
-//    DEBUG;
     return (cpu.ram[addr & cpu.datamask] & 0xf);
 
 
 END
 
 
-// STACK
+// STACK FUNCTIONS
 
 function push_stack()
 
@@ -1062,14 +1065,15 @@ BEGIN
 END
 
 
-// PORTS
-
+// WRITE AUDIO BIT
 function level_w(value)
 
 BEGIN
 
 END
 
+
+// BITWISE HELPERS
 function BIT(x,y)
 
 BEGIN
@@ -1109,6 +1113,8 @@ begin
 
 END
 
+
+// SET DISPLAY DIMENSIONS
 function set_display_size(maxx, maxy)
 
 BEGIN
@@ -1119,6 +1125,8 @@ BEGIN
 
 END
 
+
+// TURN SEGMENT OFF AFTER N TICKS
 function display_decay()
 
 BEGIN
@@ -1135,6 +1143,7 @@ BEGIN
 END
 
 
+// UPDATE DISPLAY DATA
 function display_update()
 
 PRIVATE
@@ -1175,7 +1184,7 @@ END
 
 
 
-
+// CONVERTED GRID/PLATE TO SEGMENT DATA
 function display_matrix(maxx, maxy, setx, sety)
 
 PRIVATE
@@ -1202,7 +1211,7 @@ BEGIN
 END
 
 
-
+// UPDATE DIsPLAY WITH GRID PLATE DATA
 function prepare_display()
 
 PRIVATE
@@ -1221,6 +1230,9 @@ BEGIN
 END
 
 
+// PORTS
+
+// WRITE PORT (SOUND + VIDEO)
 function output_w(port, value)
 PRIVATE
 
@@ -1270,6 +1282,8 @@ BEGIN
 
 END
 
+
+// READ PORT (CONTROLS)
 function input_r(port)
 
 PRIVATE
@@ -1320,13 +1334,14 @@ BEGIN
     end
 
     // never get here
-    return (0);//inp&0xf);//cpu.m_port_out[port]);
+    return (0);
 
 END
 
 
-// registers
+// REGISTERS
 
+// WRITE REGISTER DATA
 function ucom43_reg_w(reg, value)
 BEGIN
 
@@ -1335,6 +1350,8 @@ BEGIN
 
 END
 
+
+// READ REGISTER DATA
 function ucom43_reg_r(reg)
 BEGIN
 
@@ -1342,15 +1359,18 @@ BEGIN
 END
 
 
+
+// CHECK IF OP IS ALLOWED FOR THIS CPU
 function check_op_43()
 BEGIN
 
-//if(cpu.m_family != NEC_UCOM43)
-return (cpu.family == NEC_UCOM43);
+    return (cpu.family == NEC_UCOM43);
+
 END
 
 
-// CORRECT
+// INCREMENT PROGRAM COUNTER
+// STAYS WITHIN PAGE RANGE
 function inc_pc()
 
 begin
@@ -1361,7 +1381,7 @@ end
 
 
 
-// CORRECT
+// FETCH OP ARG
 function fetch_arg()
 
 begin
@@ -1379,27 +1399,28 @@ end
 
 
 
-// Interrupt
+// INTERRUPT ROUTINE
 // Astro Wars doesnt use interrupts
 
 function interrupt()
 
 BEGIN
 
-    cpu.icount --;
+    cpu.icount--;
     push_stack();
     cpu.pc = 0xf << 2;
     cpu.int_f = 0;
+
     cpu.inte_f = (cpu.family != NEC_UCOM43);
 
 END
 
 
-// opcodes
+// OPCODE FUNCTIONS
 
 
-// Illegal opcodes
-// Should never be called
+// ILLEGAL OP
+// SHOULD NEVER BE CALLED
 function op_illegal()
 // CHECKED
 BEGIN
@@ -2331,10 +2352,3 @@ END
 
 
 
-function op_jmp()
-
-BEGIN
-
-    DEBUG;
-
-END
