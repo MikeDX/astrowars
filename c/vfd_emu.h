@@ -8,10 +8,12 @@
  * 
  *************************/
 
-#ifndef _ASTROWARS_H_
-#define _ASTROWARS_H_
+#ifndef _VFD_EMU_H_
+#define _VFD_EMU_H_
 
 #include "ucom4_cpu.h"
+#include <SDL.h>
+#include <SDL_image.h>
 
 
 #ifdef __DEFINED_HERE__
@@ -20,7 +22,7 @@
 #define GLOBAL
 #endif
 
-
-
-
+extern SDL_Surface *screen;
+void level_w(ucom4cpu *cpu, uint8_t data);
+extern uint8_t inputs[0x10];
 #endif

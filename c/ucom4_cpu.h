@@ -113,5 +113,6 @@ void ucom4_reset(ucom4cpu *cpu);
 int32_t ucom4_exec(ucom4cpu *cpu, int32_t ticks);
 void ucom4_display_decay(ucom4cpu *cpu);
 void ucom4_display_update(ucom4cpu *cpu);
+void ucom4_display_matrix(ucom4cpu *cpu, int maxx, int maxy, int setx, int sety);
 
 #endif

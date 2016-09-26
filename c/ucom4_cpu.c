@@ -8,7 +8,7 @@
  * 
  *************************/
 
-#include "ucom4_cpu.h"
+#include "driver.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -112,53 +112,7 @@ void push_stack(ucom4cpu *cpu)
 	cpu->stack[0] = cpu->pc;
 }
 
-extern uint8_t inputs[5];
-
-uint8_t input_r(ucom4cpu *cpu, int index)
-{
-	index &= 0xf;
-	uint8_t inp = 0;
-
-/*	switch (index)
-	{
-		case NEC_UCOM4_PORTA: inp = m_read_a(index, 0xff); break;
-		case NEC_UCOM4_PORTB: inp = m_read_b(index, 0xff); break;
-		case NEC_UCOM4_PORTC: inp = m_read_c(index, 0xff) | m_port_out[index]; break;
-		case NEC_UCOM4_PORTD: inp = m_read_d(index, 0xff) | m_port_out[index]; break;
-
-		default:
-			logerror("%s read from unknown port %c at $%03X\n", tag(), 'A' + index, m_prev_pc);
-			break;
-	}
-*/
-	switch (index)
-	{
-		case NEC_UCOM4_PORTA:
-			// PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 )
-			// PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY
-			// PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY
-			// PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNUSED )
-
-			inp = inputs[2]<<2|inputs[1]<<1|inputs[0];
-
-			break;
-		case NEC_UCOM4_PORTB:
-			// PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SELECT )
-			// PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_START )
-			// PORT_BIT( 0x0c, IP_ACTIVE_HIGH, IPT_UNUSED )
-
-			inp = inputs[4]<<1|inputs[3];
-
-//			inp = 0x1;
-			//printf("Reading input port[%d]\n",index);
-			break;
-	}
-//	inp = rand()*15;
-	return inp & 0xf;
-}
-
 void ucom4_display_decay(ucom4cpu *cpu);
-
 
 void ucom4_display_update(ucom4cpu *cpu)
 {
@@ -247,7 +201,7 @@ void set_display_size(ucom4cpu *cpu, int maxx, int maxy)
 	cpu->display_maxy = maxy;
 }
 
-void display_matrix(ucom4cpu *cpu, int maxx, int maxy, int setx, int sety) {
+void ucom4_display_matrix(ucom4cpu *cpu, int maxx, int maxy, int setx, int sety) {
 	uint32_t mask = (1 << maxx) - 1;
 	int y,x;
 	set_display_size(cpu, maxx, maxy);
@@ -273,102 +227,7 @@ void display_matrix(ucom4cpu *cpu, int maxx, int maxy, int setx, int sety) {
 
 }
 
-void prepare_display(ucom4cpu *cpu) {
-	uint16_t grid = BITSWAP16(cpu->grid,15,14,13,12,11,10,0,1,2,3,4,5,6,7,8,9);
-	uint16_t plate = BITSWAP16(cpu->plate,15,3,2,6,1,5,4,0,11,10,7,12,14,13,8,9);
-
-	// grid = cpu->grid;
-	// plate = cpu->plate;
-	
-//	printf("GRID: %04X PLATE: %04X\n", plate, grid);
-	display_matrix(cpu, 15, 10, plate, grid);
-
-}
-
 FILE *sound_out = 0;
-
-void level_w(ucom4cpu *cpu, uint8_t data) {
-	data *=200;
-	cpu->audio_level = data;
-
-//	printf("%d %d\n", cpu->totalticks, data);
-
-	// int x = 0;
-	// //printf("Data: %d\n",data);
-	// for(x=0;x<8;x++) {
-	// 	audiobuf[aindex]=data*255;
-	// 	aindex++;
-		
-	// 	if( aindex >= audiosize ) {
-	// 		aindex = 0;
-	// 		printf("Buffer filled, looping\n");
-	// 	}
-	// }
-}
-
-void output_w(ucom4cpu *cpu, int index, uint8_t data)
-{
-	index &= 0xf;
-	data &= 0xf;
-
-	int shift;
-
-	if(index == NEC_UCOM4_PORTI)
-		data &=0x7;
-	
-/*	switch (index)
-	{
-		case NEC_UCOM4_PORTC: m_write_c(index, data, 0xff); break;
-		case NEC_UCOM4_PORTD: m_write_d(index, data, 0xff); break;
-		case NEC_UCOM4_PORTE: m_write_e(index, data, 0xff); break;
-		case NEC_UCOM4_PORTF: m_write_f(index, data, 0xff); break;
-		case NEC_UCOM4_PORTG: m_write_g(index, data, 0xff); break;
-		case NEC_UCOM4_PORTH: m_write_h(index, data, 0xff); break;
-		case NEC_UCOM4_PORTI: m_write_i(index, data & 7, 0xff); break;
-
-		default:
-			logerror("%s write to unknown port %c = $%X at $%03X\n", tag(), 'A' + index, data, m_prev_pc);
-			break;
-	}
-*/
-	switch (index) {
-		case NEC_UCOM4_PORTC:
-		case NEC_UCOM4_PORTD:
-		case NEC_UCOM4_PORTE:
-			// E3: speaker out
-			if (index == NEC_UCOM4_PORTE)
-				level_w(cpu, data >> 3 & 1);
-
-			// C,D,E01: vfd matrix grid
-			shift = (index - NEC_UCOM4_PORTC) * 4;
-			cpu->grid = (cpu->grid & ~(0xf << shift)) | (data << shift);
-			prepare_display(cpu);
-			break;
-
-		case NEC_UCOM4_PORTF:
-		case NEC_UCOM4_PORTG:
-		case NEC_UCOM4_PORTH:
-		case NEC_UCOM4_PORTI:
-//			printf("OUTPUT GRID: [%d][%d]\n",index,data);
-			shift = (index - NEC_UCOM4_PORTF) * 4;
-			cpu->plate = (cpu->plate & ~(0xf << shift)) | (data << shift);
-			prepare_display(cpu);
-//			printf("PLATE: %d\n", cpu->plate);
-			break;
-		default:
-			printf("Write to unknown port: %d\n",index);
-			break;
-
-	}
-	// if(index == NEC_UCOM4_PORTE) {
-	// 	printf("OUTPUT_W: PORT[%d] BIT[%d]\n",index, data >> 3 &1);
-	// }
-	cpu->port_out[index] = data;
-//	cpu->port_out_buf[index] |= data;
-//	prepare_display(cpu);
-}
-
-
 
 // basic instruction set
 
@@ -594,26 +453,26 @@ void op_reb(ucom4cpu *cpu)
 {
 	// REB B: Reset a single bit of output port E
 	cpu->icount--;
-	output_w(cpu, NEC_UCOM4_PORTE, cpu->port_out[NEC_UCOM4_PORTE] & ~cpu->bitmask);
+	active_game->output_w(cpu, NEC_UCOM4_PORTE, cpu->port_out[NEC_UCOM4_PORTE] & ~cpu->bitmask);
 }
 
 void op_seb(ucom4cpu *cpu)
 {
 	// SEB B: Set a single bit of output port E
 	cpu->icount--;
-	output_w(cpu, NEC_UCOM4_PORTE, cpu->port_out[NEC_UCOM4_PORTE] | cpu->bitmask);
+	active_game->output_w(cpu, NEC_UCOM4_PORTE, cpu->port_out[NEC_UCOM4_PORTE] | cpu->bitmask);
 }
 
 void op_rpb(ucom4cpu *cpu)
 {
 	// RPB B: Reset a single bit of output port (DPl)
-	output_w(cpu, cpu->dpl, cpu->port_out[cpu->dpl] & ~cpu->bitmask);
+	active_game->output_w(cpu, cpu->dpl, cpu->port_out[cpu->dpl] & ~cpu->bitmask);
 }
 
 void op_spb(ucom4cpu *cpu)
 {
 	// SPB B: Set a single bit of output port (DPl)
-	output_w(cpu, cpu->dpl, cpu->port_out[cpu->dpl] | cpu->bitmask);
+	active_game->output_w(cpu, cpu->dpl, cpu->port_out[cpu->dpl] | cpu->bitmask);
 }
 
 
@@ -709,13 +568,13 @@ void op_tmb(ucom4cpu *cpu)
 void op_tpa(ucom4cpu *cpu)
 {
 	// TPA B: skip next on bit(input port A)
-	cpu->skip = ((input_r(cpu, NEC_UCOM4_PORTA) & cpu->bitmask) != 0);
+	cpu->skip = ((active_game->input_r(cpu, NEC_UCOM4_PORTA) & cpu->bitmask) != 0);
 }
 
 void op_tpb(ucom4cpu *cpu)
 {
 	// TPB B: skip next on bit(input port (DPl))
-	cpu->skip = ((input_r(cpu, cpu->dpl) & cpu->bitmask) != 0);
+	cpu->skip = ((active_game->input_r(cpu, cpu->dpl) & cpu->bitmask) != 0);
 }
 
 
@@ -735,33 +594,33 @@ void op_ia(ucom4cpu *cpu)
 {
 	// IA: Input port A to ACC
 	cpu->icount--;
-	cpu->acc = input_r(cpu, NEC_UCOM4_PORTA);
+	cpu->acc = active_game->input_r(cpu, NEC_UCOM4_PORTA);
 }
 
 void op_ip(ucom4cpu *cpu)
 {
 	// IP: Input port (DPl) to ACC
-	cpu->acc = input_r(cpu, cpu->dpl);
+	cpu->acc = active_game->input_r(cpu, cpu->dpl);
 }
 
 void op_oe(ucom4cpu *cpu)
 {
 	// OE: Output ACC to port E
 	cpu->icount--;
-	output_w(cpu, NEC_UCOM4_PORTE, cpu->acc);
+	active_game->output_w(cpu, NEC_UCOM4_PORTE, cpu->acc);
 }
 
 void op_op(ucom4cpu *cpu)
 {
 	// OP: Output ACC to port (DPl)
-	output_w(cpu, cpu->dpl, cpu->acc);
+	active_game->output_w(cpu, cpu->dpl, cpu->acc);
 }
 
 void op_ocd(ucom4cpu *cpu)
 {
 	// OCD X: Output X to ports C and D
-	output_w(cpu, NEC_UCOM4_PORTD, cpu->arg >> 4);
-	output_w(cpu, NEC_UCOM4_PORTC, cpu->arg & 0xf);
+	active_game->output_w(cpu, NEC_UCOM4_PORTD, cpu->arg >> 4);
+	active_game->output_w(cpu, NEC_UCOM4_PORTC, cpu->arg & 0xf);
 }
 
 
