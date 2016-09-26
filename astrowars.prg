@@ -40,8 +40,8 @@ ram[255];
 real_op = 0;
 readport = 0;
 // CPU definition
-d = true;
-bp = 165824;
+d = false;
+bp = -1;
 
 STRUCT dbg
     string pc;
@@ -133,12 +133,15 @@ end
 
 // Load ROM
 load("d553c-153.s01",&cpu.rom);
-//set_mode(640480);
+set_mode(220600);
 set_fps(60,0);
-//load_fpg("graphics.fpg");
+load_fpg("graphics.fpg");
+graph=1;
+flags=4;
 //put_screen(0,1);
 reset();
-write_int(0,320,0,2,&fps);
+if(0)
+write_int(0,220,0,2,&fps);
 write(0,100, 0,0,&dbg.pc);
 write(0,100,10,0,&dbgstack0);
 write(0,100,20,0,&dbgstack1);
@@ -180,9 +183,9 @@ for(y=0;y<10;y++)
 
 ram[x+y*16]=x+y*16;
 write_int(0,10+x*20,100+y*10,1,
-&vfd[x].y[y]);
+//&vfd[x].y[y]);
 //cpu.display_decay[y].x[x]);
-//&ram[x+y*16]);//&ram[x+(y*16)]);
+&ram[x+y*16]);//&ram[x+(y*16)]);
 end
 end
 
@@ -190,9 +193,51 @@ end
 //frame;
 //end
 
+end // debug info
+
+
+// SETUP GRAPHS
+// DIGIT 1
+VFD_Element(0,0,108,19,-1);
+VFD_Element(0,1,98,13,-1);
+VFD_Element(0,2,88,20,-1);
+VFD_Element(0,3,98,29,-1);
+VFD_Element(0,4,88,40,-1);
+VFD_Element(0,6,108,40,-1);
+VFD_Element(0,7,98,49,-1);
+
+// DIGIT 0
+VFD_Element(0,11,108-39,19,-1);
+VFD_Element(0,8,98-39,13,-1);
+VFD_Element(0,10,88-39,20,-1);
+VFD_Element(0,12,98-39,29,-1);
+VFD_Element(0,9,88-39,40,-1);
+VFD_Element(0,13,108-39,40,-1);
+VFD_Element(0,14,98-39,49,-1);
+
+// DIGIT 3
+VFD_Element(1,0,108+86,19,-1);
+VFD_Element(1,1,98+86,13,-1);
+VFD_Element(1,2,88+86,20,-1);
+VFD_Element(1,3,98+86,29,-1);
+VFD_Element(1,4,88+86,40,-1);
+VFD_Element(1,6,108+86,40,-1);
+VFD_Element(1,7,98+86,49,-1);
+
+// DIGIT 2
+VFD_Element(1,11,108-39+86,19,-1);
+VFD_Element(1,8,98-39+86,13,-1);
+VFD_Element(1,10,88-39+86,20,-1);
+VFD_Element(1,12,98-39+86,29,-1);
+VFD_Element(1,9,88-39+86,40,-1);
+VFD_Element(1,13,108-39+86,40,-1);
+VFD_Element(1,14,98-39+86,49,-1);
+
+
+x=110;
+y=300;
 
 LOOP
-
 // dunno how this works. guess
 cpu.icount += 100000/fps;
 emulate();
@@ -203,6 +248,31 @@ emulate();
 //cpu.m_timer_f = 1;
 
 FRAME;
+END
+
+
+END
+
+
+PROCESS VFD_Element(grid, pos, x,y, default_graph)
+BEGIN
+
+if(default_graph==-1)
+    GRAPH = 50*(grid==0)+grid*100+pos;
+else
+    GRAPH = default_graph;
+END
+
+LOOP
+
+if(vfd[pos].y[grid])
+    size=100;
+else
+    size=0;
+END
+
+FRAME;
+
 END
 
 
