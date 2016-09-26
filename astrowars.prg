@@ -134,9 +134,9 @@ end
 // Load ROM
 load("d553c-153.s01",&cpu.rom);
 set_mode(220600);
-set_fps(60,0);
+set_fps(50,0);
 load_fpg("graphics.fpg");
-graph=1;
+//graph=1;
 flags=4;
 //put_screen(0,1);
 reset();
@@ -274,6 +274,77 @@ VFD_Element(3,12,121,196,205);
 VFD_Element(3,10,152,196,202);
 VFD_Element(3,9,183,196,205);
 
+// MORE BULLETS
+VFD_Element(3,4,59,216,303);
+VFD_Element(3,7,90,216,303);
+VFD_Element(3,6,121,216,303);
+VFD_Element(3,0,152,216,303);
+VFD_Element(3,1,183,216,303);
+
+
+// GRID 4
+// DOCKING TURRET / ALIEN BODY
+VFD_Element(4,2,58,251,-1);
+VFD_Element(4,5,89,252,-1);
+VFD_Element(4,12,120,252,-1);
+VFD_Element(4,10,150,252,-1);
+VFD_Element(4,9,182,252,-1);
+
+// ALIEN ARMOUR
+VFD_Element(4,3,57,254,-1);
+VFD_Element(4,14,88,254,-1);
+VFD_Element(4,13,120,254,-1);
+VFD_Element(4,11,152,254,-1);
+VFD_Element(4,8,183,254,-1);
+
+// MORE BULLETS
+VFD_Element(4,4,57,274,-1);
+VFD_Element(4,7,88,274,404);
+VFD_Element(4,6,120,274,404);
+VFD_Element(4,0,151,274,404);
+VFD_Element(4,1,182,274,404);
+
+for(x=5;x<9;x++)
+switch(x)
+    case 5:
+        y=58;
+    end
+
+    case 6:
+        y=117;
+    end
+
+    case 7:
+        y=175;
+    end
+
+    case 8:
+        y=235;
+    end
+end
+// GRIDS 5-8
+// DOCKING TURRET / ALIEN BODY
+VFD_Element(x,2,58,251+y,402);
+VFD_Element(x,5,89,252+y,405);
+VFD_Element(x,12,120,252+y,412);
+VFD_Element(x,10,150,252+y,410);
+VFD_Element(x,9,182,252+y,409);
+
+// ALIEN ARMOUR
+VFD_Element(x,3,57,254+y,403);
+VFD_Element(x,14,88,254+y,414);
+VFD_Element(x,13,120,254+y,413);
+VFD_Element(x,11,152,254+y,411);
+VFD_Element(x,8,183,254+y,408);
+
+// MORE BULLETS
+VFD_Element(x,4,57,274+y,404);
+VFD_Element(x,7,88,274+y,404);
+VFD_Element(x,6,120,274+y,404);
+VFD_Element(x,0,151,274+y,404);
+VFD_Element(x,1,182,274+y,404);
+
+end
 
 
 // GRID 9
@@ -284,11 +355,19 @@ VFD_Element(9,12,118,544,902);
 VFD_Element(9,10,149,544,902);
 VFD_Element(9,9,180,544,902);
 
+// PLAYER BASE
 VFD_Element(9,4,55,570,-1);
 VFD_Element(9,7,86,570,904);
 VFD_Element(9,6,117,570,904);
 VFD_Element(9,0,148,570,904);
 VFD_Element(9,1,179,570,904);
+
+// ALIEN / EXPLOSION SURROUND
+VFD_Element(9,3,56,545,-1);
+VFD_Element(9,14,87,545,-1);
+VFD_Element(9,13,118,545,903);
+VFD_Element(9,11,149,545,914);
+VFD_Element(9,8,180,545,903);
 
 
 x=110;
@@ -320,6 +399,7 @@ else
     GRAPH = default_graph;
 END
 
+FRAME(6000);
 LOOP
 
 if(vfd[pos].y[grid])
