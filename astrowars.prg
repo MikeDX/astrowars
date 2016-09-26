@@ -11,9 +11,10 @@ PROGRAM astrowars;
 
 CONST
 
+// CPU FAMILY
 NEC_UCOM43 = 0;
-STACK_SIZE = 4;
 
+// PORT DEFS
 NEC_UCOM4_PORTA = 0;
 NEC_UCOM4_PORTB = 1;
 NEC_UCOM4_PORTC = 2;
@@ -24,6 +25,7 @@ NEC_UCOM4_PORTG = 6;
 NEC_UCOM4_PORTH = 7;
 NEC_UCOM4_PORTI = 8;
 
+// REG DEFS
 UCOM43_X = 0;
 UCOM43_Y = 1;
 UCOM43_R = 2;
@@ -34,12 +36,11 @@ UCOM43_F = 6;
 
 
 GLOBAL
+
+// DEBUG INFO
 ram[255];
-//registers[8];
 
 real_op = 0;
-//readport = 0;
-// CPU definition
 d = false;
 bp = -1;
 
@@ -48,12 +49,6 @@ STRUCT dbg
     string dp;
 END
 
-
-struct vfd[15]
-int y[10];
-end
-
-
 string dbgstack0;
 string dbgstack1;
 string dbgstack2;
@@ -61,85 +56,89 @@ string dbgstack3;
 
 
 
+// DISPLAY DATA
+struct vfd[15]
+int y[10];
+end
+
+
+
+// CPU STRUCTURE
+
 STRUCT cpu
-    WORD pc;
-    WORD prev_pc;
-    BYTE op;
-    BYTE prev_op;
-    BYTE skip;
-    BYTE arg;
-    BYTE acc;
-    WORD stack[4];
-    BYTE port_out[0x10];
-    BYTE port_out_buf[0x10];
-    INT  tc;
-    BYTE timer_f;
-    BYTE dph;
-    BYTE dpl;
-    BYTE carry_f;
-    BYTE carry_s_f;
-    BYTE int_f;
-    BYTE inte_f;
-    BYTE int_line;
-    BYTE rom[0x800];
-    BYTE ram[0x80];
-    BYTE datamask;
-    BYTE bitmask;
-    WORD prgmask;
-    BYTE stack_levels;
-    BYTE family;
-    INT  icount;
-    INT  old_icount;
-    BYTE imp_mux;
+    WORD pc;                     // PROGRAM COUNTER
+    WORD prev_pc;                // PREVIOUS PROGRAM COUNTER
+    BYTE op;                     // OPCODE
+    BYTE prev_op;                // PREVIOUS OPCODE
+    BYTE skip;                   // SKIP FLAG
+    BYTE arg;                    // OP ARG
+    BYTE acc;                    // ACCUMULATOR
+    WORD stack[4];               // STACK STORAGE
+    BYTE port_out[0x10];         // PORT DATA
+    INT  tc;                     // TIMER COUNTER
+    BYTE timer_f;                // TIMER FLAG
+    BYTE dph;                    // DP HIGH 4 BITS
+    BYTE dpl;                    // DP LOW 4 BITS
+    BYTE carry_f;                // CARRY FLAG
+    BYTE carry_s_f;              // CARRY SAVE FLAG
+    BYTE int_f;                  // INTERRUPT FLAG
+    BYTE inte_f;                 // INTERRUPT ENABLED
+    BYTE int_line;               // INTERRUPT LINE
+    BYTE rom[0x800];             // ROM DATA
+    BYTE ram[0x80];              // RAM DATA
+    BYTE datamask;               // DATAMASK
+    BYTE bitmask;                // BITMASK
+    WORD prgmask;                // PRGMASK
+    BYTE family;                 // CPU FAMILY
+    INT  icount;                 // STATE COUNTER
+    INT  old_icount;             // STATE COUNTER DIFF
 
-    WORD grid;
-    WORD plate;
+    WORD grid;                   // GRID DATA
+    WORD plate;                  // PLATE DATA
 
-    INT  display_wait;
-    INT  display_maxy;
-    INT  display_maxx;
+    INT  display_wait;           // DISPLAY "ON" TIME
+    INT  display_maxy;           // DISPLAY HEIGHT
+    INT  display_maxx;           // DISPLAY WIDTH
 
-    INT  display_state[0x20];
-    WORD display_segmask[0x20];
-    INT  display_cache[0x20];
-    STRUCT  display_decay[0x20]
+    INT  display_state[0x20];    // DISPLAY INFO
+    WORD display_segmask[0x20];  // DISPLAY FIG8 INFO
+    INT  display_cache[0x20];    // DISPLAY CACHE
+    STRUCT  display_decay[0x20]  // DISPLAY DECAY DATA
         INT x[0x20];
     END
-    INT  decay_ticks;
-    BYTE audio_level;
-    INT  sound_ticks;
-    INT  totalticks;
-    INT  aindex;
-    INT  audio_avail;
+
+    INT  decay_ticks;            // DECAY COUNTER
+    BYTE audio_level;            // AUDIO LEVEL (BOOL)
+    INT  sound_ticks;            // SOUND TICKER
+    INT  totalticks;             // TOTAL TICK COUNTER
+    INT  aindex;                 // AUDIO BUF POSITION
+    INT  audio_avail;            // SAMPLES AVAILABLE
 
 END
 
 
+
+// MAIN PROGRAM ENTRY POINT
+
 BEGIN
-
-//Write your code here, make something amazing!
-
-/*
-write_int(0,0,0,0,&x);
-
-loop
-
-x=(0 == false);
-
-frame;
-end
-*/
 
 
 // Load ROM
 load("d553c-153.s01",&cpu.rom);
+
+// SET GRAPHICS TO 220x600
 set_mode(220600);
+
+// SET TO 50 FPS
 set_fps(50,0);
+
+// LOAD GRAPHICS
 load_fpg("graphics.fpg");
-//graph=1;
-flags=4;
-//put_screen(0,1);
+
+// RESET CPU
 reset();
+
+// SHOW DEBUG INFO
 if(0)
 write_int(0,220,0,2,&fps);
 write(0,100, 0,0,&dbg.pc);
@@ -189,9 +188,6 @@ write_int(0,10+x*20,100+y*10,1,
 end
 end
 
-//loop
-//frame;
-//end
 
 end // debug info
 
@@ -374,47 +370,52 @@ x=110;
 y=300;
 
 LOOP
-// dunno how this works. guess
-cpu.icount += 100000/50;
-emulate();
-//cpu.m_inte_f =1 ;
-//cpu.m_int_f = 1;
 
+    // ADD SOME TICKS TO THE CPU TO RUN
+    cpu.icount += 100000/50;
+    emulate();
 
-//cpu.m_timer_f = 1;
-
-FRAME;
-END
-
+    FRAME;
 
 END
 
 
+END  // END MAIN
+
+
+
+// VFD GRAPHIC PROCESS
 PROCESS VFD_Element(grid, pos, x,y, default_graph)
 BEGIN
 
-if(default_graph==-1)
-    GRAPH = 50*(grid==0)+grid*100+pos;
-else
-    GRAPH = default_graph;
+    if(default_graph==-1)
+        GRAPH = 50*(grid==0)+grid*100+pos;
+    else
+        GRAPH = default_graph;
+    END
+
+    // STAY ON SCREEN FOR A WHILE
+    FRAME(5000);
+
+    LOOP
+
+        // IS OUR SEGMENT ENABLED?
+        if(vfd[pos].y[grid])
+            size=100;
+        else
+            size=0;
+        END
+
+        FRAME;
+
+    END
+
 END
 
-FRAME(6000);
-LOOP
 
-if(vfd[pos].y[grid])
-    size=100;
-else
-    size=0;
-END
+// CPU FUNCTIONS
 
-FRAME;
-
-END
-
-
-END
-
+// RESET CPU
 function reset()
 BEGIN
 
@@ -445,6 +446,7 @@ cpu.audio_avail = 0;
 END
 
 
+// EMULATE CODE FOR cpu.icount CYCLES
 function emulate()
 
 PRIVATE
@@ -455,8 +457,10 @@ BEGIN
 
 WHILE(cpu.icount>0)
 
+    // STORE OLD COUNTER
     cpu.old_icount = cpu.icount;
 
+    // CHECK FOR INTERRUPT (Not needed on ASTRO WARS
     IF(cpu.int_f > 0 && cpu.inte_f > 0 && (cpu.op & 0xf0) != 0x90 && cpu.op !=0x31 && cpu.skip==false)
         interrupt();
         if(cpu.icount <=0)
@@ -464,30 +468,40 @@ WHILE(cpu.icount>0)
         END
     END
 
-
+    // SAVE OLD OPCODE
     cpu.prev_op = cpu.op;
+
+    // SAVE OLD PROGRAM COUNTER
     cpu.prev_pc = cpu.prev_pc;
 
+    // REDUCE TICK COUNTER
     cpu.icount--;
 
+    // FETCH OPCODE
     cpu.op = cpu.rom[cpu.pc];
 
+    // SET BITMASK BASED ON OPCODE
     cpu.bitmask = 1 << (cpu.op &0x03);
 
+    // ADVANCE PROGRAM COUNTER
     inc_pc();
+
+    // SET cpu.arg IF NEEDED
     fetch_arg();
 
+    // CHECK SKIP FLAG
     if(cpu.skip)
         cpu.skip = 0;
+
+        // SET OPCODE TO NOP
         cpu.op = 0; // NOP
     end
 
 
-    switch(cpu.op & 0xf0)
+    // MAIN OPCODE LOOP
+    SWITCH(cpu.op & 0xf0)
 
-        case 0x80:
-            op_ldz();
-        end
+        CASE 0x80:      op_ldz();   END
 
         case 0x90:
             op_li();
