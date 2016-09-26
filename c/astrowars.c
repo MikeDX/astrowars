@@ -21,7 +21,6 @@
 #include <emscripten.h>
 #endif
 
-#ifdef HAS_SDL
 #include <SDL.h>
 #include <SDL_image.h>
 
@@ -31,9 +30,36 @@ int gfx_y[10][15];
 
 SDL_Surface *gfx[10][15];
 SDL_Surface *bg;
-#endif
 
 #define MAX_EVENTS 65535
+
+// RECORD + PLAYBACK
+
+uint8_t inputs[5];
+
+uint8_t input_data;
+uint8_t old_input_data;
+
+struct input_event {
+  uint32_t cycle;
+  uint8_t val;
+} events[MAX_EVENTS], *pevent = NULL;
+
+
+static uint8_t *audio_chunk;
+static uint32_t audio_len;
+static uint8_t *audio_pos;
+
+extern uint8_t audiobuf[1024];
+extern int aindex;
+extern int audiosize;
+
+static uint8_t sbuf[2048];
+
+SDL_AudioSpec wanted, obtained;
+int sound_pos  = 0;
+int last_a = 0;
+
 
 ucom4cpu cpu;
 
@@ -52,7 +78,7 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 
 	fseek(f, 0, SEEK_END);
 	len = ftell(f);
-	printf("ROM [%s]\nLENGTH: [0x%X]\n",file, len);
+//	printf("ROM [%s]\nLENGTH: [0x%X]\n",file, len);
 	if(len!=size) {
 		fclose(f);
 		return 0;
@@ -65,8 +91,6 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 	return len;	
 
 }
-
-#ifdef HAS_SDL
 
 void setup_gfx(void) {
 	int x = 0;
@@ -226,47 +250,10 @@ void setup_gfx(void) {
 	SDL_Flip(screen);
 }
 
-uint8_t inputs[5];
-
-uint8_t input_data;
-uint8_t old_input_data;
-
-struct input_event {
-  uint32_t cycle;
-  uint8_t val;
-} events[MAX_EVENTS], *pevent = NULL;
-
 void display_update(void) {
 	int x,y;
 	SDL_Rect rect;
 
-	input_data = 0;
-	for (x=0;x<5;x++) {
-		input_data |= inputs[x]<<x;
-	}
-
-	if(!pevent && input_data!=old_input_data)
-		printf("%08x %02x\n", cpu.totalticks, input_data);
-
-	old_input_data = input_data;
-
-	if(pevent) {
-		if (cpu.totalticks >= pevent->cycle) {
-			for(x=0;x<5;x++) {
-				inputs[x]=(pevent->val & (1<<x)) ? 1:0;
-	//			printf("Input: %d %d\n",x,inputs[x]);
-			}
-			++pevent;
-		}
-	}
-
-	if(pevent && !pevent->cycle) {
-		printf("Playback ended\n");
-		pevent = NULL;
-//		exit(0);
-	}
-
-//	SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0,0,0));
 	SDL_BlitSurface(bg, NULL, screen, NULL);
 	for(x=0;x<15;x++) {
 		for(y=0;y<10;y++) {
@@ -275,7 +262,6 @@ void display_update(void) {
 				rect.y=gfx_y[y][x];
 				rect.w=gfx[y][x]->w;
 				rect.h=gfx[y][x]->h;
-	//			printf("Loaded %s\n",filename);
 				SDL_BlitSurface(gfx[y][x],NULL, screen,&rect);
 			}	
 
@@ -285,7 +271,6 @@ void display_update(void) {
 	SDL_PauseAudio(0);
 
 }
-#endif
 
 int totalticks = 0;
 int running = 1;
@@ -303,183 +288,170 @@ unsigned long long get_ms() {
     return millisecondsSinceEpoch;
 }
 
+void do_inputs(void) {
+	
+	uint8_t bit;
+
+	while(SDL_PollEvent( &event)) {
+		bit = 0;
+		if(event.type == SDL_KEYDOWN)
+			bit=1;
+
+		switch( event.type ) {
+
+			case SDL_KEYDOWN:
+			case SDL_KEYUP:
+				if(!pevent) {
+					switch(event.key.keysym.sym) {
+
+						case SDLK_SPACE: // FIRE
+							inputs[0]=bit;
+							break;
+
+						case SDLK_LEFT: // LEFT
+							inputs[1]=bit;
+							break;
+
+						case SDLK_RIGHT: // RIGHT
+							inputs[2]=bit;
+							break;
+
+						case SDLK_2: // SELECT
+							inputs[3]=bit;
+							break;
+
+						case SDLK_1: // START
+							inputs[4]=bit;
+							break;
+					}
+				}
+				break;
+			case SDL_QUIT:
+				running = 0;
+				break;
+		}
+	}
+
+}
 
 void mainloop(void) {
 
 	uint8_t bit;
 	int x = 0;
-//	printf("%lu %lu\n",ms, next_ms);
 
-#ifdef HAS_SDL
-		while(SDL_PollEvent( &event)) {
-			bit = 0;
-			if(event.type == SDL_KEYDOWN)
-				bit=1;
+	do_inputs();
 
-			switch( event.type ) {
+//	if((!pevent && get_ms() <next_ms) || cpu.audio_avail > obtained.samples) {
+#ifdef __EMSCRIPTEN__
+	if( cpu.audio_avail > obtained.samples && !pevent) {
+//		printf("Audio: %d %d\n",cpu.audio_avail, obtained.samples);
+		return;
+	}
+#endif
 
-				case SDL_KEYDOWN:
-				case SDL_KEYUP:
-					if(!pevent) {
-						switch(event.key.keysym.sym) {
+	if(get_ms() >= next_ms || pevent) {
+		next_ms +=1000/FPS;
 
-							case SDLK_SPACE: // FIRE
-								inputs[0]=bit;
-								break;
+		input_data = 0;
 
-							case SDLK_LEFT: // LEFT
-								inputs[1]=bit;
-								break;
+		for (x=0;x<5;x++) {
+			input_data |= inputs[x]<<x;
+		}
 
-							case SDLK_RIGHT: // RIGHT
-								inputs[2]=bit;
-								break;
+		if(!pevent && input_data!=old_input_data)
+			printf("%08x %02x\n", cpu.totalticks, input_data);
 
-							case SDLK_2: // SELECT
-								inputs[3]=bit;
-								break;
+		old_input_data = input_data;
 
-							case SDLK_1: // START
-								inputs[4]=bit;
-								break;
-						}
-					}
-					break;
-				case SDL_QUIT:
-					running = 0;
-					break;
+		if(pevent) {
+			if (cpu.totalticks >= pevent->cycle) {
+				for(x=0;x<5;x++) {
+					inputs[x]=(pevent->val & (1<<x)) ? 1:0;
+				}
+				++pevent;
 			}
 		}
-#endif
-//	ms = get_ms();
 
-//	SDL_PauseAudio(1);
-
-	if( get_ms() >= next_ms ) {
-		next_ms += 1000/FPS;
-		printf("Next MS: %llu\n",next_ms-get_ms());
-//		SDL_PauseAudio(0);
-//		return;
-
-
-	//int ticks = 0;
-//printf("mainloop\n");
-//		ucom4_exec(&cpu, 400000/60);
-//		printf("%d\n",ucom4_exec(&cpu, 1));//400000/60));
-		totalticks +=ucom4_exec(&cpu, 100000/FPS);//400000/284);
-//		totalticks +=ucom4_exec(&cpu, 220);
-		printf("PC: %02X TC: %d  TT: %d   \n",cpu.rom[cpu.pc],cpu.tc, totalticks);
-/*		for(x=0;x<0x80;x++) {
-			printf("%X ",cpu.ram[x]);
-			if(x%16==15)
-				printf("\n");
+		if(pevent && !pevent->cycle) {
+			printf("Playback ended\n");
+			pevent = NULL;
+			next_ms = get_ms();
+			cpu.audio_avail = 0;
 		}
-		printf("Stack: %02X %02X %02X %02X \n",cpu.pc, cpu.stack[0], cpu.stack[0],cpu.stack[1]);
-*/
-		// printf("OUTPUT: ");
-		// for(x=0;x<16;x++) {
-		// 	printf("%2X ",cpu.port_out_buf[x]);
-		// 	cpu.port_out_buf[x]=0;
+
+		// if(pevent) {
+		// 	for(x=0;x<5;x++)
+		// 		inputs[x]=pinputs[x];
 		// }
-		// printf("\r");
 
-//		ucom4_display_decay(&cpu);
+		totalticks +=ucom4_exec(&cpu, cpu.cpu_rate/FPS);//400000/284);
 
-//		ucom4_display_update(&cpu);		
-
-
-
-
-		display_update();
-
-
-#ifndef HAS_SDL
-		for(x=0;x<cpu.display_maxy;x++) {
-			for(y=cpu.display_maxx-1;y>=0;y--) {
-				printf("%d",(cpu.display_cache[x]&1<<y)?1:0);
-			}
-			printf("\n");
-		}
-		printf("\n");
-#endif
+// #ifndef HAS_SDL
+// 		for(x=0;x<cpu.display_maxy;x++) {
+// 			for(y=cpu.display_maxx-1;y>=0;y--) {
+// 				printf("%d",(cpu.display_cache[x]&1<<y)?1:0);
+// 			}
+// 			printf("\n");
+// 		}
+// 		printf("\n");
+// #endif
 
 	}
-		// replace this with proper FPS ticker
-//		usleep(10000000/200);
 
+//	if(!pevent)
+		display_update();	
 
 }
-
-static uint8_t *audio_chunk;
-static uint32_t audio_len;
-static uint8_t *audio_pos;
-
-extern uint8_t audiobuf[1024];
-extern int aindex;
-extern int audiosize;
-
-static uint8_t sbuf[2048];
-
-SDL_AudioSpec wanted;
-int a  = 0;
-int last_a = 0;
 
 void fill_audio(void *udata, Uint8 *stream, int len)
 {
 
+	int len2;
 	int z;
 
 	audio_len = cpu.audio_avail;
 
-	// if(audio_len < len) {
-	// 	SDL_PauseAudio(1);
-	// 	return;
-	// }
+//	printf("Samples available: %d\n", audio_len);
 
 
-        /* Mix as much data as possible */
-        len = ( len > audio_len ? audio_len : len );
+    len2 = ( len > audio_len ? audio_len : len );
 
-        /* Only play if we have data left */
-        // if ( audio_len == 0 )
-        //     return;
-//		printf("cpu.audio_level: %d\n",cpu.audio_level);
+//	printf("%d %d %d %d %d %d\n",len, len2, audio_len, obtained.freq, obtained.channels, obtained.samples);
 
-//		printf("audio buf: %d audio pos: %d\n",a, cpu.aindex);
-    	for(z=0;z<len;z++) {
-			sbuf[z] = audiobuf[a];//(rand()*1)*255;//(uint8_t)audiobuf[a];//*sin(F*(double)z); 
-			audiobuf[a]=0;
-			a++;
-			if(a>=10240)
-				a=0;
-    	}
+	len = len2;
 
-    	cpu.audio_avail -= len;
-//    	printf("Filling audio stream %d\n", len);
+	for(z=0;z<len;z++) {
+		stream[z] = audiobuf[sound_pos];//(rand()*1)*255;//(uint8_t)audiobuf[a];//*sin(F*(double)z); 
+		audiobuf[sound_pos]=0;
+		sound_pos++;
+		if(sound_pos>=10240)
+			sound_pos=0;
+	}
 
-        SDL_MixAudio(stream, sbuf, len, SDL_MIX_MAXVOLUME);
-//      audio_pos += len;
-//      audio_len -= len;
-//		printf("Audio reserve: %d\n",cpu.audio_avail);
+	cpu.audio_avail -= len;
+
+//    SDL_MixAudio(stream, sbuf, len, SDL_MIX_MAXVOLUME);
 
 }
 
 int init_sound(void) {
 
     /* Set the audio format */
-    wanted.freq = 22050;
+    cpu.sound_frequency = 44100;
+
+    wanted.freq = cpu.sound_frequency;
     wanted.format = AUDIO_U8;
     wanted.channels = 1;    /* 1 = mono, 2 = stereo */
-    wanted.samples = 2048;   /* Good low-latency value for callback */
+    wanted.samples = 1024;   /* Good low-latency value for callback */
     wanted.callback = fill_audio;
     wanted.userdata = NULL;
 
     /* Open the audio device, forcing the desired format */
-    if ( SDL_OpenAudio(&wanted, NULL) < 0 ) {
+    if ( SDL_OpenAudio(&wanted, &obtained) < 0 ) {
         fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
         return(-1);
     }
-    printf("Opened sound\n");
+    cpu.sound_frequency = obtained.freq;
 
     return(0);
 }
@@ -488,10 +460,10 @@ int init_sound(void) {
 int main(int argc, char *argv[])
 {
 	int x,y;
-#ifdef HAS_SDL
 
 	SDL_Init(SDL_INIT_EVERYTHING | SDL_INIT_AUDIO);
 	screen = SDL_SetVideoMode(193,684,32,SDL_HWSURFACE);
+
 	setup_gfx();
 	init_sound();
 	memset(audiobuf,0,sizeof(audiobuf));
@@ -515,23 +487,21 @@ int main(int argc, char *argv[])
 
 	}
 
-#endif
-
 	next_ms = get_ms();
-	//round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
+
+	cpu.cpu_rate = 100000;
 
 	ucom4_reset(&cpu);
 	if(load_rom(&cpu, "data/astrowars.rom", 0x800)!=0x800) {
 		printf("Failed to load astrowars.rom\n");
 		return -1;
 	}
-//	SDL_PauseAudio(0);
+
 #ifdef __EMSCRIPTEN__
-	emscripten_set_main_loop(mainloop,0,0);
+	emscripten_set_main_loop(mainloop,60,1);
 #else
 	while(running) {
 		mainloop();
-//		usleep(10000000/282);
 	}
 	SDL_Quit();
 #endif

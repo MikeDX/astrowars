@@ -104,7 +104,9 @@ typedef struct _ucom4cpu {
 	int totalticks;
 	int aindex;
 	int audio_avail;
-
+	int cpu_rate;
+	int sample_count;
+	int sound_frequency;
 } ucom4cpu;
 
 void ucom4_reset(ucom4cpu *cpu);

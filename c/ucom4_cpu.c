@@ -36,7 +36,6 @@ void ucom4_reset(ucom4cpu *cpu) {
 	cpu->prgmask    = 0x7FF;
 	cpu->datamask   = 0x7F;
 	cpu->family     = NEC_UCOM43;
-	cpu->tc         = 0;
 	cpu->timer_f    = 0;
 	cpu->stack_levels = 3;
 	memset(cpu->ram,0,sizeof(cpu->ram));
@@ -336,9 +335,9 @@ void output_w(ucom4cpu *cpu, int index, uint8_t data)
 		case NEC_UCOM4_PORTC:
 		case NEC_UCOM4_PORTD:
 		case NEC_UCOM4_PORTE:
-		// E3: speaker out
-		if (index == NEC_UCOM4_PORTE)
-			level_w(cpu, data >> 3 & 1);
+			// E3: speaker out
+			if (index == NEC_UCOM4_PORTE)
+				level_w(cpu, data >> 3 & 1);
 
 			// C,D,E01: vfd matrix grid
 			shift = (index - NEC_UCOM4_PORTC) * 4;
@@ -1058,48 +1057,27 @@ void op_di(ucom4cpu *cpu)
 
 
 
-void sound_buf(ucom4cpu *cpu) {
-	// if(cpu->sound_ticks > 400000/22050) {
-	// 	cpu->sound_ticks -=400000/22050;
-	// }
+void sound_buf(ucom4cpu *cpu, int ticks) {
+	cpu->sample_count += ticks * cpu->sound_frequency;
+    while (cpu->sample_count >= cpu->cpu_rate) {
+        cpu->sample_count -= cpu->cpu_rate;
+		audiobuf[cpu->aindex]=cpu->audio_level;
+		cpu->aindex++;
 
-	// if(!sound_out) {
-	// 	sound_out = fopen("sound.raw","wb");
-	// }
+		if(cpu->aindex>=10240) 
+			cpu->aindex=0;
 
-	#define interval 4
-	int x = 0;
-	int fill = 1;
+		cpu->audio_avail++;
 
-	if(cpu->audio_avail >8192) {
-//		while(cpu->audio_avail > 4096) {
-	//		x=0;
-	//	}
-//		printf("Over  %d\n",cpu->audio_avail);
-//		return;
-//		fill = 0;
-	}
+		// audiobuf[cpu->aindex]=cpu->audio_level;
+		// cpu->aindex++;
 
-	if(cpu->audio_avail <256) {
-//		fill+=4;
-//		printf("Under %d\n",cpu->audio_avail);	
-	}
+		// if(cpu->aindex>=10240) 
+		// 	cpu->aindex=0;
 
-	while(cpu->sound_ticks >= interval) {
-//		printf("Filling audio: %d %d %d\n",aindex, cpu->totalticks, cpu->sound_ticks);
+		// cpu->audio_avail++;
 
-		for(x=0;x<fill;x++) {
-			audiobuf[cpu->aindex]=cpu->audio_level;
-			cpu->aindex++;
-
-			if(cpu->aindex>=10240) 
-				cpu->aindex=0;
-		}
-		cpu->audio_avail+=fill;
-		
-		cpu->sound_ticks -=interval;
-	}
-//	fwrite(&cpu->audio_level, 1, 1, sound_out);
+    }
 }
 
 
@@ -1110,7 +1088,6 @@ int32_t ucom4_exec(ucom4cpu *cpu, int32_t ticks) {
 	int tickused = 0;
 	cpu->icount = ticks;
 	
-	printf("Overflow: %d\n",overflow);
 	overflow +=ticks;
 
 	while(overflow>0) {
@@ -1250,7 +1227,7 @@ int32_t ucom4_exec(ucom4cpu *cpu, int32_t ticks) {
 
 		overflow -= tickused;
 
-		sound_buf(cpu);
+		sound_buf(cpu, tickused);
 
 		if( cpu->tc > 0 ) {
 			cpu->tc -= tickused;
