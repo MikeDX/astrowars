@@ -375,7 +375,7 @@ y=300;
 
 LOOP
 // dunno how this works. guess
-cpu.icount += 100000/fps;
+cpu.icount += 100000/50;
 emulate();
 //cpu.m_inte_f =1 ;
 //cpu.m_int_f = 1;
