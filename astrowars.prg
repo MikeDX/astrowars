@@ -35,7 +35,7 @@ UCOM43_F = 6;
 
 GLOBAL
 ram[255];
-registers[8];
+//registers[8];
 
 real_op = 0;
 readport = 0;
@@ -63,68 +63,54 @@ string dbgstack3;
 
 STRUCT cpu
     WORD pc;
-    WORD m_prev_pc;
-    BYTE m_op;
-    BYTE m_prev_op;
-
+    WORD prev_pc;
+    BYTE op;
+    BYTE prev_op;
     BYTE skip;
-    BYTE m_arg;
+    BYTE arg;
     BYTE acc;
     WORD stack[4];
-    BYTE port_out_but[0x10];
-    INT tc;
-
-    BYTE m_bitmask;
-
-    BYTE m_dpl;
-    BYTE m_dph;
-    BYTE m_dph_mask;
+    BYTE port_out[0x10];
+    BYTE port_out_buf[0x10];
+    INT  tc;
+    BYTE timer_f;
+    BYTE dph;
+    BYTE dpl;
     BYTE carry_f;
+    BYTE carry_s_f;
     BYTE int_f;
-    BYTE m_carry_s_f;
-
-    BYTE m_timer_f;
-    m_time;
-    m_timeout;
-    m_tc;
-    BYTE m_family;
-
-//    m_int_f;
-    m_inte_f;
-    m_icount;
-    m_oldicount;
-
-    m_tickcount;
-
-    m_skip;
-    WORD m_prgmask;
-    m_prgwidth;
-    m_datawidth;
-    m_datamask;
+    BYTE inte_f;
+    BYTE int_line;
+    BYTE rom[0x800];
+    BYTE ram[0x80];
+    BYTE datamask;
+    BYTE bitmask;
+    WORD prgmask;
+    BYTE stack_levels;
+    BYTE family;
+    INT  icount;
+    INT  old_icount;
+    BYTE imp_mux;
 
     WORD grid;
     WORD plate;
 
-    INT display_wait;
-    INT display_maxx;
-    INT display_maxy;
+    INT  display_wait;
+    INT  display_maxy;
+    INT  display_maxx;
 
-
-    int display_state[0x20];
+    INT  display_state[0x20];
     WORD display_segmask[0x20];
-    INT display_cache[0x20];
-    STRUCT display_decay[0x20];
+    INT  display_cache[0x20];
+    STRUCT  display_decay[0x20]
         INT x[0x20];
     END
-
-    //int display_decay[0x20][0x20];
-
-    int decay_ticks;
-
-    BYTE rom[2048];
-    BYTE ram[2048];
-    BYTE m_port_out[0x10];
-    BYTE registers[16];
+    INT  decay_ticks;
+    BYTE audio_level;
+    INT  sound_ticks;
+    INT  totalticks;
+    INT  aindex;
+    INT  audio_avail;
 
 END
 
@@ -132,6 +118,17 @@ END
 BEGIN
 
 //Write your code here, make something amazing!
+
+/*
+write_int(0,0,0,0,&x);
+
+loop
+
+x=(0 == false);
+
+frame;
+end
+*/
 
 
 // Load ROM
@@ -152,12 +149,12 @@ write_int(0,30,0,0,&cpu.acc);
 write(0,0,10,0," DP: ");
 write(0,30,10,0,&dbg.dp);
 write(0,0,20,0," TC: ");
-write_int(0,30,20,0,&cpu.m_tc);
+write_int(0,30,20,0,&cpu.tc);
 
 write(0,0,30,0,"  Y: ");
-write_int(0,30,30,0,&registers[UCOM43_Y]);
+//write_int(0,30,30,0,&registers[UCOM43_Y]);
 
-write_int(0,0,80,0,&cpu.m_tickcount);
+write_int(0,0,80,0,&cpu.totalticks);
 
 
 write_int(0,0,40,0,&cpu.grid);
@@ -171,7 +168,7 @@ end
 
 
 
-write_int(0,0,90,0,&cpu.m_skip);
+write_int(0,0,90,0,&cpu.skip);
 
 
 //write_int(0,0,70,0,&cpu.m_port_out);
@@ -179,10 +176,13 @@ write_int(0,0,90,0,&cpu.m_skip);
 //write_int(0,0,90,0,&cpu.m_port_out[2]);
 
 for(x=0;x<16;x++)
-for(y=0;y<8;y++)
+for(y=0;y<10;y++)
 
 ram[x+y*16]=x+y*16;
-write_int(0,10+x*20,100+y*10,1,&vfd[x].y[y]);//cpu.display_decay[y].x[x]);//ram[x+y*16]);//&ram[x+(y*16)]);
+write_int(0,10+x*20,100+y*10,1,
+&vfd[x].y[y]);
+//cpu.display_decay[y].x[x]);
+//&ram[x+y*16]);//&ram[x+(y*16)]);
 end
 end
 
@@ -194,7 +194,7 @@ end
 LOOP
 
 // dunno how this works. guess
-cpu.m_icount += 100000/fps;
+cpu.icount += 100000/fps;
 emulate();
 //cpu.m_inte_f =1 ;
 //cpu.m_int_f = 1;
@@ -215,67 +215,68 @@ cpu.pc = 0;
 cpu.tc = 0;
 cpu.acc = 0;
 cpu.carry_f = 0;
+cpu.dpl = 0;
+cpu.skip = 0;
 cpu.int_f = 0;
-cpu.m_op = 0;
-cpu.m_arg = 0;
-cpu.m_skip = false;
-cpu.m_family = NEC_UCOM43;
-cpu.m_icount = 0;
-cpu.m_timer_f = 0;
-cpu.m_tc = 0;
-cpu.m_timeout = 0;
-cpu.m_time = 0;
-cpu.m_dpl = 0;
-cpu.m_dph = 0;
-cpu.m_tickcount = 0;
+cpu.inte_f = 0;
+cpu.icount = 0;
+cpu.old_icount = 0;
+cpu.bitmask = 0;
+cpu.prgmask = 0x7FF;
+cpu.datamask = 0x7F;
+cpu.family = NEC_UCOM43;
+cpu.timer_f = 0;
 
-// 2k ROM
-cpu.m_prgmask = 0x7FF;
-cpu.m_datamask = 0x7F;
-
-cpu.display_wait = 33;
-cpu.decay_ticks = 0;
 cpu.plate = 0;
 cpu.grid = 0;
+cpu.display_wait = 33;
+cpu.decay_ticks = 0;
+cpu.totalticks = 0;
+cpu.audio_avail = 0;
+
 
 END
 
 
 function emulate()
 
+PRIVATE
+
+BYTE curticks; // CAN ONLY BE 0 1 or 2
+
 BEGIN
 
-WHILE(cpu.m_icount>0)
+WHILE(cpu.icount>0)
 
-    IF(cpu.int_f > 0 && cpu.m_inte_f > 0 && (cpu.m_op & 0xf0) != 0x90 && cpu.m_op !=0x31 && cpu.m_skip==false)
+    cpu.old_icount = cpu.icount;
+
+    IF(cpu.int_f > 0 && cpu.inte_f > 0 && (cpu.op & 0xf0) != 0x90 && cpu.op !=0x31 && cpu.skip==false)
         interrupt();
-        if(cpu.m_icount <=0)
+        if(cpu.icount <=0)
             break;
         END
     END
 
-    cpu.m_oldicount = cpu.m_icount;
 
-    cpu.m_prev_op = cpu.m_op;
-    cpu.m_prev_pc = cpu.m_prev_pc;
+    cpu.prev_op = cpu.op;
+    cpu.prev_pc = cpu.prev_pc;
 
-    cpu.m_icount--;
+    cpu.icount--;
 
-    cpu.m_op = cpu.rom[cpu.pc];
+    cpu.op = cpu.rom[cpu.pc];
 
-    cpu.m_bitmask = 1 << (cpu.m_op &0x03);
+    cpu.bitmask = 1 << (cpu.op &0x03);
 
     inc_pc();
     fetch_arg();
 
-    if(cpu.m_skip == true)
-//        debug;
-        cpu.m_skip = false;
-        cpu.m_op = 0; // NOP
+    if(cpu.skip)
+        cpu.skip = 0;
+        cpu.op = 0; // NOP
     end
 
 
-    switch(cpu.m_op & 0xf0)
+    switch(cpu.op & 0xf0)
 
         case 0x80:
             op_ldz();
@@ -299,7 +300,7 @@ WHILE(cpu.m_icount>0)
 
 
         default:
-            switch(cpu.m_op)
+            switch(cpu.op)
                 case 0x00:
                     op_nop();
                 end
@@ -425,7 +426,7 @@ WHILE(cpu.m_icount>0)
                 end
 
                 case 0x1F:
-                    op_exl();
+                    op_dem();
                 end
 
 
@@ -512,9 +513,9 @@ WHILE(cpu.m_icount>0)
 
 
                 default:
-                    real_op = cpu.m_op & 0xfc;
+                    real_op = cpu.op & 0xfc;
 
-                    switch(cpu.m_op &0xfc)
+                    switch(cpu.op &0xfc)
 
                         case 0x20:
                             op_fbf();
@@ -532,6 +533,7 @@ WHILE(cpu.m_icount>0)
                             op_xmd();
                         end
 
+
                         case 0x34:
                             op_cmb();
                         end
@@ -543,6 +545,7 @@ WHILE(cpu.m_icount>0)
                         case 0x3C:
                             op_xmi();
                         end
+
 
                         case 0x50:
                             op_tpb();
@@ -604,32 +607,30 @@ WHILE(cpu.m_icount>0)
         end
     end
 
-    cpu.m_tickcount += (cpu.m_oldicount - cpu.m_icount);
-    cpu.decay_ticks += (cpu.m_oldicount - cpu.m_icount);
+    curticks = (cpu.old_icount - cpu.icount);
 
+    cpu.totalticks += curticks;
+    cpu.decay_ticks += curticks;
 
-    if(cpu.m_timer_f == 0)
-        //cpu.m_timeout -= (cpu.m_oldicount - cpu.m_icount);
-        cpu.m_time += (cpu.m_oldicount - cpu.m_icount);
-        //if(cpu.m_timeout<=0)
+    if(cpu.timer_f == 0)
 
-        cpu.m_tc = cpu.m_timeout - cpu.m_time;
+        // decrement timercount by ticks on this opcode
+        cpu.tc -= curticks;
 
-        if(cpu.m_tc<0)
-            cpu.m_tc = 0;
+        if(cpu.tc<0)
+            cpu.tc = 0;
         end
 
-        if(cpu.m_tc == 0)
-        //cpu.m_timeout)
-        //    DEBUG;
-            cpu.m_timer_f = 1;
+        if(cpu.tc == 0)
+            // set timer flag to 1
+            cpu.timer_f = 1;
         end
 
     end
 
     if(false)
     dbg.pc = int2hex(cpu.pc);
-    dbg.dp = int2hex(cpu.m_dph << 4 | cpu.m_dpl);
+    dbg.dp = int2hex(cpu.dph << 4 | cpu.dpl);
 
     dbgstack0=int2hex(cpu.stack[0]);
     dbgstack1=int2hex(cpu.stack[1]);
@@ -640,7 +641,7 @@ WHILE(cpu.m_icount>0)
     //dbg.pc[0]="a";
     //dbg.pc[1]="b";
 
-    if(key(_esc) || cpu.m_tickcount == bp)
+    if(key(_esc) || cpu.totalticks == bp)
         d = true;
     end
 
@@ -671,7 +672,6 @@ WHILE(cpu.m_icount>0)
 
 
 
-//    debug;
 END
 
 END
@@ -789,9 +789,9 @@ WORD addr;
 
 BEGIN
 
-    addr = cpu.m_dph << 4 | cpu.m_dpl;
-    cpu.ram[addr & cpu.m_datamask]=value&0xf;
-    ram[addr & cpu.m_datamask]=value&0xf;
+    addr = cpu.dph << 4 | cpu.dpl;
+    cpu.ram[addr & cpu.datamask]=value&0xf;
+    ram[addr & cpu.datamask]=value&0xf;
 /*
     if(value!=0)
         d = true;
@@ -809,9 +809,9 @@ WORD addr;
 
 BEGIN
 
-    addr = cpu.m_dph << 4 | cpu.m_dpl;
-    DEBUG;
-    return (cpu.ram[addr & cpu.m_datamask] & 0xf);
+    addr = cpu.dph << 4 | cpu.dpl;
+//    DEBUG;
+    return (cpu.ram[addr & cpu.datamask] & 0xf);
 
 
 END
@@ -853,7 +853,7 @@ function BIT(x,y)
 
 BEGIN
 
-return ((x>y)&1);
+return ((x>>y)&1);
 
 END
 
@@ -902,12 +902,10 @@ function display_decay()
 
 BEGIN
 
-
-    for(x=0; x < cpu.display_maxx; x++)
-        for(y=0; y < cpu.display_maxy; y++)
+    for(y=0; y < cpu.display_maxy; y++)
+        for(x=0; x < cpu.display_maxx; x++)
             if(cpu.display_decay[y].x[x] >0)
                 cpu.display_decay[y].x[x]--;
-                DEBUG;
             end
         end
     end
@@ -926,10 +924,6 @@ INT decay_time = 80;
 
 BEGIN
 
-
-    DEBUG;
-
-
     while(cpu.decay_ticks >= decay_time)
         cpu.decay_ticks -= decay_time;
         display_decay();
@@ -940,27 +934,21 @@ BEGIN
         active_state[y] = 0;
 
         for (x=0; x<= cpu.display_maxx; x++)
-            DEBUG;
-            if(((cpu.display_state[y] >> x) & 1) > 0)
+            if((cpu.display_state[y] >> x))
                 cpu.display_decay[y].x[x] = cpu.display_wait;
             end
 
-            if( cpu.display_decay[y].x[x] !=0)
-                ds = 1;
-            else
-                ds = 0;
-            end
+            ds = ( cpu.display_decay[y].x[x] >0);
 
             active_state[y] |= ( ds << x);
-            vfd[x].y[y] = ds;
 
+            vfd[x].y[y] = ds;
 
         end
 
         cpu.display_cache[y] = active_state[y];
 
     end
-
 
 END
 
@@ -979,11 +967,8 @@ BEGIN
 
     set_display_size(maxx, maxy);
 
-    DEBUG;
-
     for ( y = 0; y< maxy; y++ )
-        if(sety >> y &1)
-            DEBUG;
+        if((sety >> y &1 >0))
             cpu.display_state[y] = (( setx & mask ) | ( 1 << maxx));
         else
             cpu.display_state[y] = 0;
@@ -1006,15 +991,11 @@ WORD plate;
 
 BEGIN
 
-    DEBUG;
 
     grid = BITSWAP16(cpu.grid, 15,14,13,12,11,10,0,1,2,3,4,5,6,7,8,9);
     plate = BITSWAP16(cpu.plate, 15,3,2,6,1,5,4,0,11,10,7,12,14,13,8,9);
 
-    DEBUG;
-
     display_matrix(15,10,plate,grid);
-
 
 END
 
@@ -1034,14 +1015,16 @@ BEGIN
 
 
     switch(port)
-        case NEC_UCOM4_PORTC, NEC_UCOM4_PORTD, NEC_UCOM4_PORTE:
+        case NEC_UCOM4_PORTC,
+             NEC_UCOM4_PORTD,
+             NEC_UCOM4_PORTE:
 
             if(port == NEC_UCOM4_PORTE)
                 level_w(value >> 3 &1);
             end
 
             shift = (port - NEC_UCOM4_PORTC) *4;
-            cpu.grid = ( cpu.grid & (0xFF - ( 0xf << shift) )) | ( value << shift );
+            cpu.grid = ( cpu.grid & !( 0xf << shift) ) | ( value << shift );
             prepare_display();
         end
 
@@ -1053,8 +1036,7 @@ BEGIN
 
 
             shift = (port - NEC_UCOM4_PORTF) *4;
-            cpu.plate = ( cpu.plate & (0xFF - ( 0xf << shift) )) | ( value << shift );
-            DEBUG;
+            cpu.plate = ( cpu.plate & !( 0xf << shift) ) | ( value << shift );
             prepare_display();
         end
 
@@ -1062,7 +1044,7 @@ BEGIN
     end
 
 
-    cpu.m_port_out[port]=value;
+    cpu.port_out[port]=value;
 
 
 END
@@ -1107,7 +1089,7 @@ BEGIN
 
     end
 
-    return (inp&0x7);//cpu.m_port_out[port]);
+    return (inp&0xf);//cpu.m_port_out[port]);
 
 END
 
@@ -1117,21 +1099,15 @@ END
 function ucom43_reg_w(reg, value)
 BEGIN
 
-//    cpu.registers[reg]=value;
-//    registers[reg]=value;
-
-    cpu.ram[cpu.m_datamask-reg]=value;
-    ram[cpu.m_datamask-reg]=value;
-
-    DEBUG;
+    cpu.ram[cpu.datamask-reg]=value;
+    ram[cpu.datamask-reg]=value;
 
 END
 
 function ucom43_reg_r(reg)
 BEGIN
 
-    DEBUG;
-    return(cpu.ram[cpu.m_datamask-reg]);//registers[reg]);
+    return(cpu.ram[cpu.datamask-reg]);//registers[reg]);
 END
 
 
@@ -1139,32 +1115,32 @@ function check_op_43()
 BEGIN
 
 //if(cpu.m_family != NEC_UCOM43)
-return (cpu.m_family == NEC_UCOM43);
+return (cpu.family == NEC_UCOM43);
 END
 
 
+// CORRECT
 function inc_pc()
 
 begin
 
-// increment pc, but only lower 8 bits
-//cpu.m_pc++;
-//cpu.m_pc &=0xFF;
-cpu.pc = (cpu.pc &0xFF00) | ((cpu.pc +1) & 0xFF);
+    cpu.pc = (cpu.pc & !0xFF) | ((cpu.pc +1) & 0xFF);
 
 end
 
 
+
+// CORRECT
 function fetch_arg()
 
 begin
 
-// only 2 byte opcodes have args
-if ((cpu.m_op & 0xfc) == 0x14 || (cpu.m_op & 0xf0) == 0xa0 || cpu.m_op == 0x1e)
-    cpu.m_icount--;
-    cpu.m_arg = cpu.rom[cpu.pc];
-    inc_pc();
-end
+    // only 2 byte opcodes have args
+    if ((cpu.op & 0xfc) == 0x14 || (cpu.op & 0xf0) == 0xa0 || cpu.op == 0x1e)
+        cpu.icount--;
+        cpu.arg = cpu.rom[cpu.pc];
+        inc_pc();
+    end
 
 end
 
@@ -1179,13 +1155,11 @@ function interrupt()
 
 BEGIN
 
-cpu.m_icount --;
-push_stack();
-cpu.pc = 0xf << 2;
-cpu.int_f = 0;
-cpu.m_inte_f = (cpu.m_family != NEC_UCOM43);
-
-DEBUG;
+    cpu.icount --;
+    push_stack();
+    cpu.pc = 0xf << 2;
+    cpu.int_f = 0;
+    cpu.inte_f = (cpu.family != NEC_UCOM43);
 
 END
 
@@ -1196,83 +1170,91 @@ END
 // Illegal opcodes
 // Should never be called
 function op_illegal()
+// CHECKED
 BEGIN
     DEBUG;
 END
 
 // 00 - NOP
 function op_nop()
-
+// CHECKED
 BEGIN
 // NOTHING! HURRAH!
+if(cpu.op!=0)
+    DEBUG;
+end
+
 END
+
 
 // 01 - DI (not used for astro wars)
 function op_di()
-
+// CHECKED
 BEGIN
 
-    if(!check_op_43())
+    if(cpu.op!=0x1)
         DEBUG;
+    end
+
+    if(!check_op_43())
         return;
 
     end
-
-    cpu.m_inte_f = 0;
-    debug;
+    // Disable Interrupts
+    cpu.inte_f = 0;
 
 END
+
 
 // 02 - S
 // Store ACC to RAM
 function op_s()
-
+// CHECKED
 BEGIN
+
+    if(cpu.op!=0x2)
+        DEBUG;
+    end
 
     ram_w(cpu.acc);
 
 END
 
+
 // 03 - TIT
 // Interrupt
 function op_tit()
-
+// CHECKED
 BEGIN
-    if(cpu.int_f !=0)
-        cpu.m_skip = true;
 
-    // not needed?
-    else
-        cpu.m_skip = false;
-    end
+    cpu.skip = (cpu.int_f !=0);
+
     cpu.int_f = 0;
 
-    debug;
 END
+
 
 // 04 - TC
 function op_tc()
-
+// CHECKED
 BEGIN
-    if(cpu.carry_f !=0)
-        cpu.m_skip = true;
-    else
-        cpu.m_skip = false;
-    end
+
+    cpu.skip = (cpu.carry_f !=0);
 
 END
 
+
 // 05 - TTM
 function op_ttm()
-
+// CHECKED
 BEGIN
 
     if(!check_op_43())
         return;
     end
 
-    if(cpu.m_timer_f == 1)
-        cpu.m_skip = true;
+    if(cpu.timer_f != 0)
+        cpu.skip = true;
     end
 
 END
@@ -1280,7 +1262,7 @@ END
 
 // 06 - DAA
 function op_daa()
-
+// CHECKED
 BEGIN
 
     cpu.acc = ( cpu.acc + 6 ) &0xf;
@@ -1289,21 +1271,21 @@ END
 
 // 07 - TAL
 function op_tal()
-
+// CHECKED
 BEGIN
 
-    cpu.m_dpl = cpu.acc;
+    cpu.dpl = cpu.acc;
 END
+
 
 // 08 - AD
 function op_ad()
-
+// CHECKED
 BEGIN
 
     cpu.acc += ram_r();
-    if(( cpu.acc & 0x10) !=0)
-        cpu.m_skip = true;
-    end
+
+    cpu.skip = (( cpu.acc & 0x10) !=0);
 
     cpu.acc &= 0xf;
 
@@ -1312,20 +1294,19 @@ END
 
 // 09 - ADS
 function op_ads()
-
+// CHECKED
 BEGIN
 
     op_adc();
-    if( cpu.carry_f !=0)
-        cpu.m_skip = true;
-    end
+
+    cpu.skip = ( cpu.carry_f !=0);
 
 END
 
 
 // 0a - DAS
 function op_das()
-
+// CHECKED
 BEGIN
 
     cpu.acc = ( cpu.acc + 10 ) &0xf;
@@ -1336,7 +1317,7 @@ END
 
 // 0b - CLC
 function op_clc()
-
+// CHECKED
 BEGIN
 
     cpu.carry_f = 0;
@@ -1344,115 +1325,106 @@ BEGIN
 
 END
 
+
 // 0c - CM
 function op_cm()
-
+// CHECKED
 BEGIN
 
-    if ( cpu.acc == ram_r())
-        cpu.m_skip = true;
-    end
+    cpu.skip = ( cpu.acc == ram_r());
 
 END
 
 
 // 0d - INC
 function op_inc()
-
+// CHECKED
 BEGIN
 
     cpu.acc = ( cpu.acc + 1 ) & 0xf;
 
-    if( cpu.acc == 0)
-        cpu.m_skip = true;
-    end
+    cpu.skip = ( cpu.acc == 0 );
 
 END
 
 
 // 0e - OP
 function op_op()
-
+// CHECKED
 BEGIN
 
-    output_w(cpu.m_dpl, cpu.acc);
+    output_w(cpu.dpl, cpu.acc);
 
 END
 
 
 // 0f - DEC
 function op_dec()
-
+// CHECKED
 BEGIN
 
     cpu.acc = ( cpu.acc - 1 ) & 0xf;
 
-    if ( cpu.acc == 0x0f)
-        cpu.m_skip = true;
-    end
+    cpu.skip = ( cpu.acc == 0xf );
 
 END
 
 
 // 10 - CMA
 function op_cma()
+// CHECKED
 BEGIN
 
     cpu.acc ^= 0xf;
 END
 
+
 // 11 - CIA
 function op_cia()
+// CHECKED
 BEGIN
-
-    DEBUG;
+    cpu.acc = (( cpu.acc ^ 0xf) +1) &0xf;
 END
+
 
 // 12 - TLA
 function op_tla()
+// CHECKED
 BEGIN
 
-    DEBUG;
+    cpu.acc = cpu.dpl;
+
 END
 
 
 // 0x13 - DED
 function op_ded()
+// CHECKED
 BEGIN
 
-    cpu.m_dpl = (cpu.m_dpl -1) &0xf;
+    cpu.dpl = (cpu.dpl -1) & 0xf;
 
-    if(cpu.m_dpl == 0xf)
-        cpu.m_skip = true;
-        debug;
-    end
+    cpu.skip = (cpu.dpl == 0xf );
 
 END
 
 
 // 0x14 - STM
 function op_stm()
+// CHECKED
 BEGIN
 
     if(!check_op_43())
-        debug;
         return;
     end
 
-    if(cpu.m_timer_f == 0)
-//        DEBUG;
-    end
+    // reset timer flag
+    cpu.timer_f = 0;
 
-    cpu.m_timer_f = 0;
+    // set to now plus however many ticks (should be 2)
+    // which will be reduced to n*63 on op return;
+    cpu.tc = ((cpu.arg &0x3f) +1)*63 + (cpu.old_icount - cpu.icount);
 
-    // Set a timer to fire at m_arg * 640usec
-    // TODO
-
-    cpu.m_timeout = ((cpu.m_arg &0x3f) +1)*63 + (cpu.m_oldicount - cpu.m_icount);
-    cpu.m_time = 0;
-    //cpu.m_oldicount = cpu.m_icount;
-
-  //  DEBUG;
 
 END
 
@@ -1460,38 +1432,37 @@ END
 // 15 - LDI X
 // LOAD DP with X
 function op_ldi()
-
+// CHECKED
 BEGIN
-    cpu.m_dph = cpu.m_arg >> 4 & 0xf;
-    cpu.m_dpl = cpu.m_arg & 0xf;
+    cpu.dph = cpu.arg >> 4 & 0xf;
+    cpu.dpl = cpu.arg & 0xf;
 
 END
 
 
 // 16 - CLI
 function op_cli()
+// CHECKED
 BEGIN
 
-    if ( cpu.m_dpl == ( cpu.m_arg & 0xf))
-        cpu.m_skip = true;
-    end
+    cpu.skip = ( cpu.dpl == ( cpu.arg & 0xf));
 
 END
 
 
 // 17 - CI
 function op_ci()
+// CHECKED
 BEGIN
 
-    if ( cpu.acc == (cpu.m_arg & 0xf) )
-        cpu.m_skip = true;
-    end
+    cpu.skip = ( cpu.acc == (cpu.arg & 0xf) );
 
 END
 
 
 // 18 - EXL
 function op_exl()
+// CHECKED
 BEGIN
 
     cpu.acc ^= ram_r();
@@ -1500,6 +1471,7 @@ END
 
 // 19 - ADC
 function op_adc()
+// CHECKED
 BEGIN
 
     cpu.acc += ram_r() + cpu.carry_f;
@@ -1508,17 +1480,28 @@ BEGIN
 
 END
 
+
 // 1A - XC
 function op_xc()
-BEGIN
+// CHECKED
+PRIVATE
+BYTE c;
 
-    DEBUG;
+BEGIN
+    if(!check_op_43())
+        return;
+    end
+
+    c = cpu.carry_f;
+    cpu.carry_f = cpu.carry_s_f;
+    cpu.carry_s_f = c;
+
 END
 
 
 // 1B - STC
 function op_stc()
-
+// CHECKED
 BEGIN
 
     cpu.carry_f = 1;
@@ -1531,7 +1514,7 @@ END
 
 // 1D - INM
 function op_inm()
-
+// CHCKED
 PRIVATE
 BYTE val;
 
@@ -1544,32 +1527,42 @@ BEGIN
     val = (ram_r() +1) & 0xf;
     ram_w(val);
 
-    if(val == 0)
-        cpu.m_skip = true;
-    end
+    cpu.skip = (val == 0);
+
 END
 
 
 // 1E - OCD
 function op_ocd()
-
+// CHECKED
 BEGIN
 
-    output_w(NEC_UCOM4_PORTD, cpu.m_arg >> 4);
-    output_w(NEC_UCOM4_PORTC, cpu.m_arg & 0xf);
+    output_w(NEC_UCOM4_PORTD, cpu.arg >> 4);
+    output_w(NEC_UCOM4_PORTC, cpu.arg & 0xf);
 END
 
 
 // 1F - DEM
 function op_dem()
-BEGIN
+// CHECKED
+PRIVATE
+BYTE val;
 
-    DEBUG;
+BEGIN
+    IF(!check_op_43())
+        return;
+    END
+
+    val = (ram_r() -1) &0xf;
+    ram_w(val);
+    cpu.skip = (val == 0xf);
+
 END
 
 
 // 30 - RAR
 function op_rar()
+// CHECKED
 PRIVATE
 
 BYTE c;
@@ -1605,13 +1598,12 @@ END
 
 // 33 - IND
 function op_ind()
+// CHECKED
 BEGIN
 
-    cpu.m_dpl = ( cpu.m_dpl + 1) & 0xf;
+    cpu.dpl = ( cpu.dpl + 1 ) & 0xf;
 
-    if(cpu.m_dpl == 0)
-        cpu.m_skip = true;
-    end
+    cpu.skip = (cpu.dpl == 0);
 
 END
 
@@ -1626,22 +1618,24 @@ END
 
 // 41 - JPA
 function op_jpa()
+// CHECKED
 BEGIN
 
-    cpu.m_icount--;
-    cpu.pc = (cpu.pc & (0xFFFF - 0x3F)) | (cpu.acc << 2);
+    cpu.icount--;
+    cpu.pc = (cpu.pc & !0x3F) | (cpu.acc << 2);
 END
 
 
 // 42 - TAZ
 function op_taz()
+// CHECKED
 BEGIN
 
     if(!check_op_43())
         return;
     end
 
-    cpu.m_icount--;
+    cpu.icount--;
     ucom43_reg_w(UCOM43_Z, cpu.acc);
 
 END
@@ -1649,13 +1643,14 @@ END
 
 // 43 - TAW
 function op_taw()
+// CHECKED
 BEGIN
 
     if(!check_op_43())
         return;
     end
 
-    cpu.m_icount--;
+    cpu.icount--;
     ucom43_reg_w(UCOM43_W, cpu.acc);
 
 END
@@ -1663,9 +1658,10 @@ END
 
 // 44 - OE
 function op_oe()
+// CHECKED
 BEGIN
 
-    cpu.m_icount--;
+    cpu.icount--;
     output_w(NEC_UCOM4_PORTE, cpu.acc);
 END
 
@@ -1675,46 +1671,54 @@ END
 
 // 0x46 - TLY
 function op_tly()
-
+// CHECKED
 BEGIN
     if(!check_op_43())
         return;
     end
 
-    cpu.m_icount--;
-    ucom43_reg_w(UCOM43_Y,cpu.m_dpl);
+    cpu.icount--;
+    ucom43_reg_w(UCOM43_Y,cpu.dpl);
 
 END
 
 
 // 47 - THX
 function op_thx()
+// CHECKED
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.icount--;
+    ucom43_reg_w(UCOM43_X, cpu.dph);
+
 END
 
 
 // 0x48 - RT
 function op_rt()
-
+// CHECKED
 BEGIN
-    cpu.m_icount--;
+    cpu.icount--;
     pop_stack();
 END
 
 
 // 49 - RTS
 function op_rts()
+// CHECKED
 BEGIN
-
-    DEBUG;
+    op_rt();
+    cpu.skip = true;
 END
 
 
 // 4A - XAZ
 function op_xaz()
-
+// CHECKED
 PRIVATE
 
 BYTE old_acc;
@@ -1726,7 +1730,7 @@ BEGIN
         return;
     end
 
-    cpu.m_icount--;
+    cpu.icount--;
     old_acc = cpu.acc;
     cpu.acc = ucom43_reg_r(UCOM43_Z);
     ucom43_reg_w(UCOM43_Z, old_acc);
@@ -1736,7 +1740,7 @@ END
 
 // 4B - XAW
 function op_xaw()
-
+// CHECKED
 PRIVATE
 BYTE old_acc;
 
@@ -1746,7 +1750,7 @@ BEGIN
         return;
     end
 
-    cpu.m_icount--;
+    cpu.icount--;
     old_acc = cpu.acc;
     cpu.acc = ucom43_reg_r(UCOM43_W);
     ucom43_reg_w(UCOM43_W, old_acc);
@@ -1772,7 +1776,7 @@ END
 
 // 0x4E - XLY
 function op_xly()
-
+// CHECKED
 PRIVATE
 
 BYTE old_dpl;
@@ -1783,9 +1787,9 @@ BEGIN
         return;
     end
 
-    cpu.m_icount--;
-    old_dpl = cpu.m_dpl;
-    cpu.m_dpl = ucom43_reg_r(UCOM43_Y);
+    cpu.icount--;
+    old_dpl = cpu.dpl;
+    cpu.dpl = ucom43_reg_r(UCOM43_Y);
     ucom43_reg_w(UCOM43_Y, old_dpl);
 
 END
@@ -1793,9 +1797,24 @@ END
 
 // 4F - XHX
 function op_xhx()
+// CHECKED
+PRIVATE
+
+BYTE old_dph;
+
 BEGIN
 
-    DEBUG;
+    if(!check_op_43())
+        return;
+    end
+
+    cpu.icount--;
+
+    old_dph = cpu.dph;
+    cpu.dph = ucom43_reg_r(UCOM43_X);
+    ucom43_reg_w(UCOM43_X, old_dph);
+
+
 END
 
 
@@ -1804,28 +1823,28 @@ END
 
 // 20 - FBF
 function op_fbf()
+// CHECKED
 BEGIN
 
     if(!check_op_43())
         return;
     end
 
-    cpu.m_icount--;
+    cpu.icount--;
 
-    if ((ucom43_reg_r(UCOM43_F) & cpu.m_bitmask)==0)
-        cpu.m_skip = true;
-    end
+
+    cpu.skip = ((ucom43_reg_r(UCOM43_F) & cpu.bitmask)==0);
+
 
 END
 
 
 // 24 - TAB
 function op_tab()
+// CHECKED
 BEGIN
 
-    if (( cpu.acc & cpu.m_bitmask) !=0)
-        cpu.m_skip = true;
-    end
+    cpu.skip = (( cpu.acc & cpu.bitmask) !=0);
 
 END
 
@@ -1833,7 +1852,7 @@ END
 // 28 - XM  (0x2B)
 //
 function op_xm()
-
+// CHECKED
 PRIVATE
 BYTE old_acc;
 
@@ -1842,23 +1861,21 @@ BEGIN
     old_acc = cpu.acc;
     cpu.acc = ram_r();
     ram_w(old_acc);
-    cpu.m_dph ^=  (cpu.m_op & 0x03);
+    cpu.dph ^= (cpu.op & 0x03);
 END
 
 
 // 2C - XMD
 //
 function op_xmd()
-
-
+// CHECKED
 BEGIN
 
     op_xm();
-    cpu.m_dpl = (cpu.m_dpl -1) & 0xf;
+    cpu.dpl = (cpu.dpl -1) & 0xf;
 
-    if(cpu.m_dpl == 0xf)
-        cpu.m_skip = true;
-    end
+    cpu.skip = (cpu.dpl == 0xf);
+
 
 END
 
@@ -1874,72 +1891,67 @@ END
 // 38
 
 function op_lm()
-
+// CHECKED
 BEGIN
 
-
     cpu.acc = ram_r();
-    cpu.m_dph ^= (cpu.m_op &0x03);
+    cpu.dph ^= (cpu.op &0x03);
 
 END
 
 
 // 3C - XMI
 function op_xmi()
+// CHECKED
 BEGIN
 
     op_xm();
-    cpu.m_dpl = (cpu.m_dpl + 1) & 0xf;
-
-    if ( cpu.m_dpl == 0 )
-        cpu.m_skip = true;
-    end
+    cpu.dpl = (cpu.dpl + 1) & 0xf;
+    cpu.skip = ( cpu.dpl == 0 );
 
 END
 
 
 // 50 - TPB
 function op_tpb()
+// CHECKED
 BEGIN
 
-    if (( input_r(cpu.m_dpl) & cpu.m_bitmask )!=0 )
-        cpu.m_skip = true;
-    end
+    cpu.skip = (( input_r(cpu.dpl) & cpu.bitmask )!=0 );
 END
 
 
 // 54 - TPA
 function op_tpa()
+// CHECKED
 BEGIN
 
-    DEBUG;
+    cpu.skip = ((ram_r() & cpu.bitmask) !=0);
+
 END
 
 
 // 58 - TMB
 function op_tmb()
+// CHECKED
 BEGIN
 
-    if ((ram_r() & cpu.m_bitmask) !=0)
-        cpu.m_skip = true;
-    end
+    cpu.skip = ((ram_r() & cpu.bitmask) !=0);
+
 END
 
 
 // 5C - FBT
 function op_fbt()
+// CHECKED
 BEGIN
 
     if(!check_op_43())
         return;
     end
 
-    cpu.m_icount--;
-
-    if (( ucom43_reg_r(UCOM43_F) & cpu.m_bitmask) !=0)
-        cpu.m_skip = true;
-    end
-
+    cpu.icount--;
+    cpu.skip = (( ucom43_reg_r(UCOM43_F) & cpu.bitmask) !=0);
 
 END
 
@@ -1954,33 +1966,35 @@ END
 
 // 64 - REB
 function op_reb()
-
+// CHECKED
 BEGIN
 
-    cpu.m_icount--;
-    output_w(NEC_UCOM4_PORTE, cpu.m_port_out[NEC_UCOM4_PORTE] & (0xFF-cpu.m_bitmask));
+    cpu.icount--;
+    output_w(NEC_UCOM4_PORTE, cpu.port_out[NEC_UCOM4_PORTE] & !cpu.bitmask);
 
 END
 
 
 // 68 - RMB
 function op_rmb()
+// CHECKED
 BEGIN
 
-    ram_w(ram_r() & (0xFF - cpu.m_bitmask));
+    ram_w(ram_r() & !cpu.bitmask);
 END
 
 
 // 6C - RFB
 function op_rfb()
+// CHECKED
 BEGIN
 
     if(!check_op_43())
         return;
     end
 
-    cpu.m_icount--;
-    ucom43_reg_w(UCOM43_f, ucom43_reg_r(UCOM43_F) & (0xFF - cpu.m_bitmask));
+    cpu.icount--;
+    ucom43_reg_w(UCOM43_F, ucom43_reg_r(UCOM43_F) & !cpu.bitmask);
 
 END
 
@@ -1995,33 +2009,36 @@ END
 
 // 74 - SEB
 function op_seb()
+// CHECKED
 BEGIN
 
-    cpu.m_icount--;
-    output_w(NEC_UCOM4_PORTE, cpu.m_port_out[NEC_UCOM4_PORTE] | cpu.m_bitmask);
+    cpu.icount--;
+    output_w(NEC_UCOM4_PORTE, cpu.port_out[NEC_UCOM4_PORTE] | cpu.bitmask);
 
 END
 
 
 // 78 - SMB
 function op_smb()
+// CHECKED
 BEGIN
 
-    ram_w(ram_r() | cpu.m_bitmask);
+    ram_w(ram_r() | cpu.bitmask);
 
 END
 
 
 // 7C - SFB
 function op_sfb()
+// CHECKED
 BEGIN
 
      if(!check_op_43())
         return;
      end
 
-     cpu.m_icount--;
-     ucom43_reg_w(UCOM43_F, ucom43_reg_r(UCOM43_F) | cpu.m_bitmask);
+     cpu.icount--;
+     ucom43_reg_w(UCOM43_F, ucom43_reg_r(UCOM43_F) | cpu.bitmask);
 
 END
 
@@ -2029,51 +2046,53 @@ END
 
 // 0x80 - LDZ
 function op_ldz()
-
+// CHECKED
 BEGIN
 
-    cpu.m_dph = 0;
-    cpu.m_dpl = cpu.m_op & 0x0f;
+    cpu.dph = 0;
+    cpu.dpl = cpu.op & 0x0f;
 
 END
+
 
 // 0x90 - LI
 function op_li()
+// CHECKED
 BEGIN
 
-    if((cpu.m_prev_op & 0xf0) != (cpu.m_op & 0xf0))
-  //      debug;
-        cpu.acc = cpu.m_op & 0x0f;
+    if((cpu.prev_op & 0xf0) != (cpu.op & 0xf0))
+        cpu.acc = cpu.op & 0x0f;
     end
 
 END
+
 
 // 0xA0 - JMPCAL
 function op_jmpcal()
-
+// CHECKED
 BEGIN
-    if ((cpu.m_op & 0x08) >0)
+    if ((cpu.op & 0x08) >0)
         push_stack();
     end
 
-    cpu.pc = (( cpu.m_op & 0x07) << 8 | cpu.m_arg) & cpu.m_prgmask;
-    //DEBUG;
+    cpu.pc = (( cpu.op & 0x07) << 8 | cpu.arg) & cpu.prgmask;
 END
+
 
 // 0xB0 - CZP
 function op_czp()
-
+// CHECKED
 BEGIN
     push_stack();
-    cpu.pc = (cpu.m_op & 0x0f) << 2;
+    cpu.pc = (cpu.op & 0x0f) << 2;
 END
 
 // 0xC0 0xD0 0xE0 0xF0 - JCP
 function op_jcp()
-
+// CHECKED
 BEGIN
-    cpu.pc = (cpu.pc & (0xFFFF - 0x3F)) | (cpu.m_op & 0x3F);
-//    debug;
+    cpu.pc = (cpu.pc & !0x3F) | (cpu.op & 0x3F);
+
 END
 
 
