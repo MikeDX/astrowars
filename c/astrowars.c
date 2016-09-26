@@ -16,6 +16,7 @@
 
 #include "astrowars.h"
 
+#define FPS 50
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -281,6 +282,7 @@ void display_update(void) {
 		}
 	}
 	SDL_Flip(screen);
+	SDL_PauseAudio(0);
 
 }
 #endif
@@ -305,40 +307,8 @@ unsigned long long get_ms() {
 void mainloop(void) {
 
 	uint8_t bit;
-	ms = get_ms();
 	int x = 0;
 //	printf("%lu %lu\n",ms, next_ms);
-
-	if( ms >= next_ms ) {
-		next_ms += 1000/60;
-	
-//		return;
-
-
-	//int ticks = 0;
-//printf("mainloop\n");
-//		ucom4_exec(&cpu, 400000/60);
-//		printf("%d\n",ucom4_exec(&cpu, 1));//400000/60));
-		totalticks +=ucom4_exec(&cpu, 400000/284);
-//		totalticks +=ucom4_exec(&cpu, 220);
-//		printf("PC: %02X TC: %d  TT: %d   \n",cpu.rom[cpu.pc],cpu.tc, totalticks);
-/*		for(x=0;x<0x80;x++) {
-			printf("%X ",cpu.ram[x]);
-			if(x%16==15)
-				printf("\n");
-		}
-		printf("Stack: %02X %02X %02X %02X \n",cpu.pc, cpu.stack[0], cpu.stack[0],cpu.stack[1]);
-*/
-		// printf("OUTPUT: ");
-		// for(x=0;x<16;x++) {
-		// 	printf("%2X ",cpu.port_out_buf[x]);
-		// 	cpu.port_out_buf[x]=0;
-		// }
-		// printf("\r");
-
-//		ucom4_display_decay(&cpu);
-
-//		ucom4_display_update(&cpu);		
 
 #ifdef HAS_SDL
 		while(SDL_PollEvent( &event)) {
@@ -380,11 +350,50 @@ void mainloop(void) {
 					break;
 			}
 		}
-	}
+#endif
+//	ms = get_ms();
+
+//	SDL_PauseAudio(1);
+
+	if( get_ms() >= next_ms ) {
+		next_ms += 1000/FPS;
+		printf("Next MS: %llu\n",next_ms-get_ms());
+//		SDL_PauseAudio(0);
+//		return;
 
 
-	display_update();
-#else
+	//int ticks = 0;
+//printf("mainloop\n");
+//		ucom4_exec(&cpu, 400000/60);
+//		printf("%d\n",ucom4_exec(&cpu, 1));//400000/60));
+		totalticks +=ucom4_exec(&cpu, 100000/FPS);//400000/284);
+//		totalticks +=ucom4_exec(&cpu, 220);
+		printf("PC: %02X TC: %d  TT: %d   \n",cpu.rom[cpu.pc],cpu.tc, totalticks);
+/*		for(x=0;x<0x80;x++) {
+			printf("%X ",cpu.ram[x]);
+			if(x%16==15)
+				printf("\n");
+		}
+		printf("Stack: %02X %02X %02X %02X \n",cpu.pc, cpu.stack[0], cpu.stack[0],cpu.stack[1]);
+*/
+		// printf("OUTPUT: ");
+		// for(x=0;x<16;x++) {
+		// 	printf("%2X ",cpu.port_out_buf[x]);
+		// 	cpu.port_out_buf[x]=0;
+		// }
+		// printf("\r");
+
+//		ucom4_display_decay(&cpu);
+
+//		ucom4_display_update(&cpu);		
+
+
+
+
+		display_update();
+
+
+#ifndef HAS_SDL
 		for(x=0;x<cpu.display_maxy;x++) {
 			for(y=cpu.display_maxx-1;y>=0;y--) {
 				printf("%d",(cpu.display_cache[x]&1<<y)?1:0);
@@ -394,6 +403,7 @@ void mainloop(void) {
 		printf("\n");
 #endif
 
+	}
 		// replace this with proper FPS ticker
 //		usleep(10000000/200);
 
@@ -408,6 +418,8 @@ extern uint8_t audiobuf[1024];
 extern int aindex;
 extern int audiosize;
 
+static uint8_t sbuf[2048];
+
 SDL_AudioSpec wanted;
 int a  = 0;
 int last_a = 0;
@@ -419,6 +431,10 @@ void fill_audio(void *udata, Uint8 *stream, int len)
 
 	audio_len = cpu.audio_avail;
 
+	// if(audio_len < len) {
+	// 	SDL_PauseAudio(1);
+	// 	return;
+	// }
 
 
         /* Mix as much data as possible */
@@ -431,7 +447,8 @@ void fill_audio(void *udata, Uint8 *stream, int len)
 
 //		printf("audio buf: %d audio pos: %d\n",a, cpu.aindex);
     	for(z=0;z<len;z++) {
-			stream[z] = audiobuf[a];//(rand()*1)*255;//(uint8_t)audiobuf[a];//*sin(F*(double)z); 
+			sbuf[z] = audiobuf[a];//(rand()*1)*255;//(uint8_t)audiobuf[a];//*sin(F*(double)z); 
+			audiobuf[a]=0;
 			a++;
 			if(a>=10240)
 				a=0;
@@ -440,9 +457,9 @@ void fill_audio(void *udata, Uint8 *stream, int len)
     	cpu.audio_avail -= len;
 //    	printf("Filling audio stream %d\n", len);
 
-//        SDL_MixAudio(stream, soundbuf, len, SDL_MIX_MAXVOLUME);
-        audio_pos += len;
-        audio_len -= len;
+        SDL_MixAudio(stream, sbuf, len, SDL_MIX_MAXVOLUME);
+//      audio_pos += len;
+//      audio_len -= len;
 //		printf("Audio reserve: %d\n",cpu.audio_avail);
 
 }
@@ -450,7 +467,7 @@ void fill_audio(void *udata, Uint8 *stream, int len)
 int init_sound(void) {
 
     /* Set the audio format */
-    wanted.freq = 44100;
+    wanted.freq = 22050;
     wanted.format = AUDIO_U8;
     wanted.channels = 1;    /* 1 = mono, 2 = stereo */
     wanted.samples = 2048;   /* Good low-latency value for callback */
@@ -508,9 +525,9 @@ int main(int argc, char *argv[])
 		printf("Failed to load astrowars.rom\n");
 		return -1;
 	}
-	SDL_PauseAudio(0);
+//	SDL_PauseAudio(0);
 #ifdef __EMSCRIPTEN__
-	emscripten_set_main_loop(mainloop,60,0);
+	emscripten_set_main_loop(mainloop,0,0);
 #else
 	while(running) {
 		mainloop();

@@ -87,8 +87,8 @@ typedef struct _ucom4cpu {
 	int old_icount;
 	uint8_t inp_mux ;
 
-	uint32_t grid;
-	uint32_t plate;
+	uint16_t grid;
+	uint16_t plate;
 
 	int display_wait;                 // led/lamp off-delay in microseconds (default 33ms)
 	int display_maxy;                 // display matrix number of rows
