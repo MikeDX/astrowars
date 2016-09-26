@@ -492,7 +492,7 @@ int main(int argc, char *argv[])
 	cpu.cpu_rate = 100000;
 
 	ucom4_reset(&cpu);
-	if(load_rom(&cpu, "data/astrowars.rom", 0x800)!=0x800) {
+	if(load_rom(&cpu, "Caveman.bin", 0x800)!=0x800) {
 		printf("Failed to load astrowars.rom\n");
 		return -1;
 	}
