@@ -49,6 +49,11 @@ STRUCT dbg
 END
 
 
+struct vfd[15]
+int y[10];
+end
+
+
 string dbgstack0;
 string dbgstack1;
 string dbgstack2;
@@ -57,18 +62,25 @@ string dbgstack3;
 
 
 STRUCT cpu
-    WORD m_pc;
+    WORD pc;
     WORD m_prev_pc;
     BYTE m_op;
     BYTE m_prev_op;
+
+    BYTE skip;
     BYTE m_arg;
+    BYTE acc;
+    WORD stack[4];
+    BYTE port_out_but[0x10];
+    INT tc;
+
     BYTE m_bitmask;
 
-    BYTE m_acc;
     BYTE m_dpl;
     BYTE m_dph;
     BYTE m_dph_mask;
-    BYTE m_carry_f;
+    BYTE carry_f;
+    BYTE int_f;
     BYTE m_carry_s_f;
 
     BYTE m_timer_f;
@@ -77,7 +89,7 @@ STRUCT cpu
     m_tc;
     BYTE m_family;
 
-    m_int_f;
+//    m_int_f;
     m_inte_f;
     m_icount;
     m_oldicount;
@@ -85,14 +97,32 @@ STRUCT cpu
     m_tickcount;
 
     m_skip;
-    m_prgmask;
+    WORD m_prgmask;
     m_prgwidth;
     m_datawidth;
     m_datamask;
 
+    WORD grid;
+    WORD plate;
+
+    INT display_wait;
+    INT display_maxx;
+    INT display_maxy;
+
+
+    int display_state[0x20];
+    WORD display_segmask[0x20];
+    INT display_cache[0x20];
+    STRUCT display_decay[0x20];
+        INT x[0x20];
+    END
+
+    //int display_decay[0x20][0x20];
+
+    int decay_ticks;
+
     BYTE rom[2048];
     BYTE ram[2048];
-    WORD stack[255];
     BYTE m_port_out[0x10];
     BYTE registers[16];
 
@@ -111,13 +141,14 @@ set_fps(60,0);
 //load_fpg("graphics.fpg");
 //put_screen(0,1);
 reset();
+write_int(0,320,0,2,&fps);
 write(0,100, 0,0,&dbg.pc);
 write(0,100,10,0,&dbgstack0);
 write(0,100,20,0,&dbgstack1);
 write(0,100,30,0,&dbgstack2);
 
 write(0,0,0,0,"ACC: ");
-write_int(0,30,0,0,&cpu.m_acc);
+write_int(0,30,0,0,&cpu.acc);
 write(0,0,10,0," DP: ");
 write(0,30,10,0,&dbg.dp);
 write(0,0,20,0," TC: ");
@@ -127,6 +158,17 @@ write(0,0,30,0,"  Y: ");
 write_int(0,30,30,0,&registers[UCOM43_Y]);
 
 write_int(0,0,80,0,&cpu.m_tickcount);
+
+
+write_int(0,0,40,0,&cpu.grid);
+write_int(0,0,50,0,&cpu.plate);
+
+
+for(x=0;x<12;x++)
+    write_int(0,x*30,70,0,&cpu.display_cache[x]);
+end
+
+
 
 
 write_int(0,0,90,0,&cpu.m_skip);
@@ -140,7 +182,7 @@ for(x=0;x<16;x++)
 for(y=0;y<8;y++)
 
 ram[x+y*16]=x+y*16;
-write_int(0,10+x*20,100+y*10,1,&ram[x+y*16]);//&ram[x+(y*16)]);
+write_int(0,10+x*20,100+y*10,1,&vfd[x].y[y]);//cpu.display_decay[y].x[x]);//ram[x+y*16]);//&ram[x+(y*16)]);
 end
 end
 
@@ -152,7 +194,7 @@ end
 LOOP
 
 // dunno how this works. guess
-cpu.m_icount += 400000/60;
+cpu.m_icount += 100000/fps;
 emulate();
 //cpu.m_inte_f =1 ;
 //cpu.m_int_f = 1;
@@ -169,7 +211,11 @@ END
 function reset()
 BEGIN
 
-cpu.m_pc = 0;
+cpu.pc = 0;
+cpu.tc = 0;
+cpu.acc = 0;
+cpu.carry_f = 0;
+cpu.int_f = 0;
 cpu.m_op = 0;
 cpu.m_arg = 0;
 cpu.m_skip = false;
@@ -185,8 +231,12 @@ cpu.m_tickcount = 0;
 
 // 2k ROM
 cpu.m_prgmask = 0x7FF;
-//cpu.stackptr = 0;//STACK_SIZE;
 cpu.m_datamask = 0x7F;
+
+cpu.display_wait = 33;
+cpu.decay_ticks = 0;
+cpu.plate = 0;
+cpu.grid = 0;
 
 END
 
@@ -197,7 +247,7 @@ BEGIN
 
 WHILE(cpu.m_icount>0)
 
-    IF(cpu.m_int_f>0 && cpu.m_inte_f>0 && (cpu.m_op & 0xf0) != 0x90 && cpu.m_op !=0x31 && cpu.m_skip==false)
+    IF(cpu.int_f > 0 && cpu.m_inte_f > 0 && (cpu.m_op & 0xf0) != 0x90 && cpu.m_op !=0x31 && cpu.m_skip==false)
         interrupt();
         if(cpu.m_icount <=0)
             break;
@@ -211,7 +261,7 @@ WHILE(cpu.m_icount>0)
 
     cpu.m_icount--;
 
-    cpu.m_op = cpu.rom[cpu.m_pc];
+    cpu.m_op = cpu.rom[cpu.pc];
 
     cpu.m_bitmask = 1 << (cpu.m_op &0x03);
 
@@ -219,7 +269,7 @@ WHILE(cpu.m_icount>0)
     fetch_arg();
 
     if(cpu.m_skip == true)
-        debug;
+//        debug;
         cpu.m_skip = false;
         cpu.m_op = 0; // NOP
     end
@@ -555,6 +605,7 @@ WHILE(cpu.m_icount>0)
     end
 
     cpu.m_tickcount += (cpu.m_oldicount - cpu.m_icount);
+    cpu.decay_ticks += (cpu.m_oldicount - cpu.m_icount);
 
 
     if(cpu.m_timer_f == 0)
@@ -570,19 +621,21 @@ WHILE(cpu.m_icount>0)
 
         if(cpu.m_tc == 0)
         //cpu.m_timeout)
-            DEBUG;
+        //    DEBUG;
             cpu.m_timer_f = 1;
         end
 
     end
 
-    dbg.pc = int2hex(cpu.m_pc);
+    if(false)
+    dbg.pc = int2hex(cpu.pc);
     dbg.dp = int2hex(cpu.m_dph << 4 | cpu.m_dpl);
 
     dbgstack0=int2hex(cpu.stack[0]);
     dbgstack1=int2hex(cpu.stack[1]);
     dbgstack2=int2hex(cpu.stack[2]);
     dbgstack3=int2hex(cpu.stack[3]);
+    end
 
     //dbg.pc[0]="a";
     //dbg.pc[1]="b";
@@ -634,6 +687,7 @@ INT high;
 INT low;
 
 begin
+    return (itoa(val));
 
     high = val >> 8;
     low = val &0xFF;
@@ -662,6 +716,7 @@ STRING str;
 STRING strh;
 STRING strl;
 BEGIN
+    return (itoa(val));
 
     high = val >> 4;
     low = val &0xf;
@@ -770,14 +825,14 @@ BEGIN
     for(x=3;x>0;x--)
         cpu.stack[x]=cpu.stack[x-1];
     end
-    cpu.stack[0]= cpu.m_pc;
+    cpu.stack[0]= cpu.pc;
 END
 
 
 function pop_stack()
 BEGIN
 
-    cpu.m_pc = cpu.stack[0];
+    cpu.pc = cpu.stack[0];
 
     for(x=0;x<3;x++)
         cpu.stack[x]=cpu.stack[x+1];
@@ -788,22 +843,271 @@ END
 
 // PORTS
 
-function output_w(port, value)
+function level_w(value)
 
 BEGIN
 
-cpu.m_port_out[port]=value;
+END
+
+function BIT(x,y)
+
+BEGIN
+
+return ((x>y)&1);
+
+END
+
+function BITSWAP16(val, B15, B14, B13, B12, B11, B10, B9, B8,
+                   B7, B6, B5, B4, B3, B2, B1, B0)
+
+private
+ret;
+
+begin
+
+    ret =
+        BIT(val, B15) << 15 |
+        BIT(val, B14) << 14 |
+        BIT(val, B13) << 13 |
+        BIT(val, B12) << 12 |
+        BIT(val, B11) << 11 |
+        BIT(val, B10) << 10 |
+        BIT(val, B9) << 9 |
+        BIT(val, B8) << 8 |
+        BIT(val, B7) << 7 |
+        BIT(val, B6) << 6 |
+        BIT(val, B5) << 5 |
+        BIT(val, B4) << 4 |
+        BIT(val, B3) << 3 |
+        BIT(val, B2) << 2 |
+        BIT(val, B1) << 1 |
+        BIT(val, B0);
+
+
+    return (ret);
+
+END
+
+function set_display_size(maxx, maxy)
+
+BEGIN
+
+    cpu.display_maxx = maxx;
+    cpu.display_maxy = maxy;
+
+
+END
+
+function display_decay()
+
+BEGIN
+
+
+    for(x=0; x < cpu.display_maxx; x++)
+        for(y=0; y < cpu.display_maxy; y++)
+            if(cpu.display_decay[y].x[x] >0)
+                cpu.display_decay[y].x[x]--;
+                DEBUG;
+            end
+        end
+    end
+
+
+END
+
+
+function display_update()
+
+PRIVATE
+INT active_state[0x20];
+INT ds;
+INT mul;
+INT decay_time = 80;
+
+BEGIN
+
+
+    DEBUG;
+
+
+    while(cpu.decay_ticks >= decay_time)
+        cpu.decay_ticks -= decay_time;
+        display_decay();
+    end
+
+
+    for(y=0; y< cpu.display_maxy; y++)
+        active_state[y] = 0;
+
+        for (x=0; x<= cpu.display_maxx; x++)
+            DEBUG;
+            if(((cpu.display_state[y] >> x) & 1) > 0)
+                cpu.display_decay[y].x[x] = cpu.display_wait;
+            end
+
+            if( cpu.display_decay[y].x[x] !=0)
+                ds = 1;
+            else
+                ds = 0;
+            end
+
+            active_state[y] |= ( ds << x);
+            vfd[x].y[y] = ds;
+
+
+        end
+
+        cpu.display_cache[y] = active_state[y];
+
+    end
+
+
+END
+
+
+
+
+function display_matrix(maxx, maxy, setx, sety)
+
+PRIVATE
+
+INT mask;
+
+BEGIN
+
+    mask = (1 << maxx) -1;
+
+    set_display_size(maxx, maxy);
+
+    DEBUG;
+
+    for ( y = 0; y< maxy; y++ )
+        if(sety >> y &1)
+            DEBUG;
+            cpu.display_state[y] = (( setx & mask ) | ( 1 << maxx));
+        else
+            cpu.display_state[y] = 0;
+        end
+    end
+
+
+    display_update();
+
+END
+
+
+
+function prepare_display()
+
+PRIVATE
+
+WORD grid;
+WORD plate;
+
+BEGIN
+
+    DEBUG;
+
+    grid = BITSWAP16(cpu.grid, 15,14,13,12,11,10,0,1,2,3,4,5,6,7,8,9);
+    plate = BITSWAP16(cpu.plate, 15,3,2,6,1,5,4,0,11,10,7,12,14,13,8,9);
+
+    DEBUG;
+
+    display_matrix(15,10,plate,grid);
+
+
+END
+
+
+function output_w(port, value)
+PRIVATE
+
+shift;
+
+BEGIN
+    port &= 0xf;
+    value &= 0xf;
+
+    if(port == NEC_UCOM4_PORTI)
+        value &=0x7;
+    end
+
+
+    switch(port)
+        case NEC_UCOM4_PORTC, NEC_UCOM4_PORTD, NEC_UCOM4_PORTE:
+
+            if(port == NEC_UCOM4_PORTE)
+                level_w(value >> 3 &1);
+            end
+
+            shift = (port - NEC_UCOM4_PORTC) *4;
+            cpu.grid = ( cpu.grid & (0xFF - ( 0xf << shift) )) | ( value << shift );
+            prepare_display();
+        end
+
+
+        case NEC_UCOM4_PORTF,
+             NEC_UCOM4_PORTG,
+             NEC_UCOM4_PORTH,
+             NEC_UCOM4_PORTI:
+
+
+            shift = (port - NEC_UCOM4_PORTF) *4;
+            cpu.plate = ( cpu.plate & (0xFF - ( 0xf << shift) )) | ( value << shift );
+            DEBUG;
+            prepare_display();
+        end
+
+
+    end
+
+
+    cpu.m_port_out[port]=value;
 
 
 END
 
 function input_r(port)
 
+PRIVATE
+
+BYTE inp;
+
 BEGIN
 
     readport = port;
+    inp = 0;
 
-    return (cpu.m_port_out[port]);
+    switch(port)
+        case NEC_UCOM4_PORTA:
+            if(key(_space))
+                inp+=1;
+            end
+
+            if(key(_left))
+                inp+=2;
+            end
+
+            if(key(_right))
+                inp+=4;
+            end
+
+        end
+
+        case NEC_UCOM4_PORTB:
+            if(key(_2))
+                inp+=1;
+            end
+
+            if(key(_1))
+                inp+=2;
+            end
+
+        end
+
+    end
+
+    return (inp&0x7);//cpu.m_port_out[port]);
 
 END
 
@@ -846,7 +1150,7 @@ begin
 // increment pc, but only lower 8 bits
 //cpu.m_pc++;
 //cpu.m_pc &=0xFF;
-cpu.m_pc = (cpu.m_pc &0xFF00) | ((cpu.m_pc +1) & 0xFF);
+cpu.pc = (cpu.pc &0xFF00) | ((cpu.pc +1) & 0xFF);
 
 end
 
@@ -858,7 +1162,7 @@ begin
 // only 2 byte opcodes have args
 if ((cpu.m_op & 0xfc) == 0x14 || (cpu.m_op & 0xf0) == 0xa0 || cpu.m_op == 0x1e)
     cpu.m_icount--;
-    cpu.m_arg = cpu.rom[cpu.m_pc];
+    cpu.m_arg = cpu.rom[cpu.pc];
     inc_pc();
 end
 
@@ -877,8 +1181,8 @@ BEGIN
 
 cpu.m_icount --;
 push_stack();
-cpu.m_pc = 0xf << 2;
-cpu.m_int_f = 0;
+cpu.pc = 0xf << 2;
+cpu.int_f = 0;
 cpu.m_inte_f = (cpu.m_family != NEC_UCOM43);
 
 DEBUG;
@@ -925,7 +1229,7 @@ function op_s()
 
 BEGIN
 
-    ram_w(cpu.m_acc);
+    ram_w(cpu.acc);
 
 END
 
@@ -934,14 +1238,14 @@ END
 function op_tit()
 
 BEGIN
-    if(cpu.m_int_f !=0)
+    if(cpu.int_f !=0)
         cpu.m_skip = true;
 
     // not needed?
     else
         cpu.m_skip = false;
     end
-    cpu.m_int_f = 0;
+    cpu.int_f = 0;
 
     debug;
 END
@@ -950,7 +1254,7 @@ END
 function op_tc()
 
 BEGIN
-    if(cpu.m_carry_f !=0)
+    if(cpu.carry_f !=0)
         cpu.m_skip = true;
     else
         cpu.m_skip = false;
@@ -979,7 +1283,7 @@ function op_daa()
 
 BEGIN
 
-    cpu.m_acc = ( cpu.m_acc + 6 ) &0xf;
+    cpu.acc = ( cpu.acc + 6 ) &0xf;
 END
 
 
@@ -988,7 +1292,7 @@ function op_tal()
 
 BEGIN
 
-    cpu.m_dpl = cpu.m_acc;
+    cpu.m_dpl = cpu.acc;
 END
 
 // 08 - AD
@@ -996,12 +1300,12 @@ function op_ad()
 
 BEGIN
 
-    cpu.m_acc += ram_r();
-    if(( cpu.m_acc & 0x10) !=0)
+    cpu.acc += ram_r();
+    if(( cpu.acc & 0x10) !=0)
         cpu.m_skip = true;
     end
 
-    cpu.m_acc &= 0xf;
+    cpu.acc &= 0xf;
 
 END
 
@@ -1012,7 +1316,7 @@ function op_ads()
 BEGIN
 
     op_adc();
-    if( cpu.m_carry_f !=0)
+    if( cpu.carry_f !=0)
         cpu.m_skip = true;
     end
 
@@ -1024,7 +1328,7 @@ function op_das()
 
 BEGIN
 
-    cpu.m_acc = ( cpu.m_acc + 10 ) &0xf;
+    cpu.acc = ( cpu.acc + 10 ) &0xf;
 
 
 END
@@ -1035,7 +1339,7 @@ function op_clc()
 
 BEGIN
 
-    cpu.m_carry_f = 0;
+    cpu.carry_f = 0;
 
 
 END
@@ -1045,7 +1349,7 @@ function op_cm()
 
 BEGIN
 
-    if ( cpu.m_acc == ram_r())
+    if ( cpu.acc == ram_r())
         cpu.m_skip = true;
     end
 
@@ -1057,9 +1361,9 @@ function op_inc()
 
 BEGIN
 
-    cpu.m_acc = ( cpu.m_acc + 1 ) & 0xf;
+    cpu.acc = ( cpu.acc + 1 ) & 0xf;
 
-    if( cpu.m_acc == 0)
+    if( cpu.acc == 0)
         cpu.m_skip = true;
     end
 
@@ -1071,7 +1375,7 @@ function op_op()
 
 BEGIN
 
-    output_w(cpu.m_dpl, cpu.m_acc);
+    output_w(cpu.m_dpl, cpu.acc);
 
 END
 
@@ -1081,9 +1385,9 @@ function op_dec()
 
 BEGIN
 
-    cpu.m_acc = ( cpu.m_acc - 1 ) & 0xf;
+    cpu.acc = ( cpu.acc - 1 ) & 0xf;
 
-    if ( cpu.m_acc == 0x0f)
+    if ( cpu.acc == 0x0f)
         cpu.m_skip = true;
     end
 
@@ -1094,7 +1398,7 @@ END
 function op_cma()
 BEGIN
 
-    cpu.m_acc ^= 0xf;
+    cpu.acc ^= 0xf;
 END
 
 // 11 - CIA
@@ -1179,7 +1483,7 @@ END
 function op_ci()
 BEGIN
 
-    if ( cpu.m_acc == (cpu.m_arg & 0xf) )
+    if ( cpu.acc == (cpu.m_arg & 0xf) )
         cpu.m_skip = true;
     end
 
@@ -1190,7 +1494,7 @@ END
 function op_exl()
 BEGIN
 
-    cpu.m_acc ^= ram_r();
+    cpu.acc ^= ram_r();
 END
 
 
@@ -1198,9 +1502,9 @@ END
 function op_adc()
 BEGIN
 
-    cpu.m_acc += ram_r() + cpu.m_carry_f;
-    cpu.m_carry_f = cpu.m_acc >> 4 & 1;
-    cpu.m_acc &= 0xf;
+    cpu.acc += ram_r() + cpu.carry_f;
+    cpu.carry_f = cpu.acc >> 4 & 1;
+    cpu.acc &= 0xf;
 
 END
 
@@ -1217,7 +1521,7 @@ function op_stc()
 
 BEGIN
 
-    cpu.m_carry_f = 1;
+    cpu.carry_f = 1;
 
 END
 
@@ -1275,9 +1579,9 @@ BEGIN
         return;
     end
 
-    c = cpu.m_acc &1;
-    cpu.m_acc = cpu.m_acc >> 1 | cpu.m_carry_f << 3;
-    cpu.m_carry_f = c;
+    c = cpu.acc &1;
+    cpu.acc = cpu.acc >> 1 | cpu.carry_f << 3;
+    cpu.carry_f = c;
 
 
 END
@@ -1325,7 +1629,7 @@ function op_jpa()
 BEGIN
 
     cpu.m_icount--;
-    cpu.m_pc = (cpu.m_pc & (0xFFFF - 0x3F)) | (cpu.m_acc << 2);
+    cpu.pc = (cpu.pc & (0xFFFF - 0x3F)) | (cpu.acc << 2);
 END
 
 
@@ -1338,7 +1642,7 @@ BEGIN
     end
 
     cpu.m_icount--;
-    ucom43_reg_w(UCOM43_Z, cpu.m_acc);
+    ucom43_reg_w(UCOM43_Z, cpu.acc);
 
 END
 
@@ -1352,7 +1656,7 @@ BEGIN
     end
 
     cpu.m_icount--;
-    ucom43_reg_w(UCOM43_W, cpu.m_acc);
+    ucom43_reg_w(UCOM43_W, cpu.acc);
 
 END
 
@@ -1362,7 +1666,7 @@ function op_oe()
 BEGIN
 
     cpu.m_icount--;
-    output_w(NEC_UCOM4_PORTE, cpu.m_acc);
+    output_w(NEC_UCOM4_PORTE, cpu.acc);
 END
 
 
@@ -1423,8 +1727,8 @@ BEGIN
     end
 
     cpu.m_icount--;
-    old_acc = cpu.m_acc;
-    cpu.m_acc = ucom43_reg_r(UCOM43_Z);
+    old_acc = cpu.acc;
+    cpu.acc = ucom43_reg_r(UCOM43_Z);
     ucom43_reg_w(UCOM43_Z, old_acc);
 
 END
@@ -1443,8 +1747,8 @@ BEGIN
     end
 
     cpu.m_icount--;
-    old_acc = cpu.m_acc;
-    cpu.m_acc = ucom43_reg_r(UCOM43_W);
+    old_acc = cpu.acc;
+    cpu.acc = ucom43_reg_r(UCOM43_W);
     ucom43_reg_w(UCOM43_W, old_acc);
 
 END
@@ -1519,7 +1823,7 @@ END
 function op_tab()
 BEGIN
 
-    if (( cpu.m_acc & cpu.m_bitmask) !=0)
+    if (( cpu.acc & cpu.m_bitmask) !=0)
         cpu.m_skip = true;
     end
 
@@ -1535,8 +1839,8 @@ BYTE old_acc;
 
 BEGIN
 
-    old_acc = cpu.m_acc;
-    cpu.m_acc = ram_r();
+    old_acc = cpu.acc;
+    cpu.acc = ram_r();
     ram_w(old_acc);
     cpu.m_dph ^=  (cpu.m_op & 0x03);
 END
@@ -1574,7 +1878,7 @@ function op_lm()
 BEGIN
 
 
-    cpu.m_acc = ram_r();
+    cpu.acc = ram_r();
     cpu.m_dph ^= (cpu.m_op &0x03);
 
 END
@@ -1739,7 +2043,7 @@ BEGIN
 
     if((cpu.m_prev_op & 0xf0) != (cpu.m_op & 0xf0))
   //      debug;
-        cpu.m_acc = cpu.m_op & 0x0f;
+        cpu.acc = cpu.m_op & 0x0f;
     end
 
 END
@@ -1752,7 +2056,7 @@ BEGIN
         push_stack();
     end
 
-    cpu.m_pc = (( cpu.m_op & 0x07) << 8 | cpu.m_arg) & cpu.m_prgmask;
+    cpu.pc = (( cpu.m_op & 0x07) << 8 | cpu.m_arg) & cpu.m_prgmask;
     //DEBUG;
 END
 
@@ -1761,14 +2065,14 @@ function op_czp()
 
 BEGIN
     push_stack();
-    cpu.m_pc = (cpu.m_op & 0x0f) << 2;
+    cpu.pc = (cpu.m_op & 0x0f) << 2;
 END
 
 // 0xC0 0xD0 0xE0 0xF0 - JCP
 function op_jcp()
 
 BEGIN
-    cpu.m_pc = (cpu.m_pc & (0xFFFF - 0x3F)) | (cpu.m_op & 0x3F);
+    cpu.pc = (cpu.pc & (0xFFFF - 0x3F)) | (cpu.m_op & 0x3F);
 //    debug;
 END
 
