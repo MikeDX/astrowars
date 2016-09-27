@@ -188,6 +188,47 @@ void caveman_setup_gfx(void) {
 	gfx_x[3][18]=249;	gfx_y[3][18]=6;
 
 
+	// GRID 4
+
+	// NO 0
+	// MUD
+
+	gfx_x[4][1]=357;	gfx_y[4][1]=15;
+	
+	// AXE
+	gfx_x[4][5]=348;	gfx_y[4][5]=93;
+
+	// NO 6
+
+	// HEAD UP
+	gfx_x[4][7]=332;	gfx_y[4][7]=113;
+
+	// BODY
+	gfx_x[4][8]=317;	gfx_y[4][8]=140;
+
+	// HEAD DOWN
+	gfx_x[4][9]=317;	gfx_y[4][9]=171;
+
+	// EGG
+	gfx_x[4][10]=316;	gfx_y[4][10]=153;
+
+	// MUD
+	gfx_x[4][11]=353;	gfx_y[4][11]=153;
+
+	// AXE
+	gfx_x[4][12]=316;	gfx_y[4][12]=107;
+
+	// MUD
+	gfx_x[4][13]=332;	gfx_y[4][13]=103;
+	gfx_x[4][14]=325;	gfx_y[4][14]=79;
+	gfx_x[4][15]=338;	gfx_y[4][15]=63;
+	gfx_x[4][16]=336;	gfx_y[4][16]=28;
+
+	// PTERODACTYLS
+	gfx_x[4][17]=318;	gfx_y[4][17]=36;
+	gfx_x[4][18]=317;	gfx_y[4][18]=6;
+
+
 	for(x=0;x<19;x++) {
 		for(y=0;y<10;y++) {
 			sprintf(filename,"res/gfx/caveman/%d.%d.png",y,x);
