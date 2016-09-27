@@ -229,6 +229,108 @@ void caveman_setup_gfx(void) {
 	gfx_x[4][18]=317;	gfx_y[4][18]=6;
 
 
+
+	// GRID 5
+
+	// NO 0
+	// MUD
+
+	gfx_x[5][1]=425;	gfx_y[5][1]=15;
+	
+	// AXE
+	gfx_x[5][3]=418;	gfx_y[5][3]=59;
+	gfx_x[5][4]=385;	gfx_y[5][4]=76;
+	gfx_x[5][5]=413;	gfx_y[5][5]=91;
+
+	// NO 6
+
+	// HEAD UP
+	gfx_x[5][7]=401;	gfx_y[5][7]=114;
+
+	// BODY
+	gfx_x[5][8]=383;	gfx_y[5][8]=139;
+
+	// HEAD DOWN
+	gfx_x[5][9]=383;	gfx_y[5][9]=170;
+
+	// EGG
+	gfx_x[5][10]=416;	gfx_y[5][10]=159;
+
+	// MUD
+	gfx_x[5][11]=390;	gfx_y[5][11]=150;
+
+	// AXE
+	gfx_x[5][12]=384;	gfx_y[5][12]=107;
+
+	// MUD
+	gfx_x[5][13]=401;	gfx_y[5][13]=103;
+	gfx_x[5][14]=403;	gfx_y[5][14]=81;
+	gfx_x[5][15]=400;	gfx_y[5][15]=63;
+	gfx_x[5][16]=405;	gfx_y[5][16]=29;
+
+	// PTERODACTYLS
+	gfx_x[5][17]=385;	gfx_y[5][17]=36;
+	gfx_x[5][18]=384;	gfx_y[5][18]=6;
+
+
+	// GRID 6
+	// ROCKS
+	gfx_x[6][1]=452;	gfx_y[6][1]=6;
+
+	// AXE
+	gfx_x[6][2]=454;	gfx_y[6][2]=33;
+	gfx_x[6][3]=452;	gfx_y[6][3]=66;
+
+	// DINO BODY
+	gfx_x[6][6]=486;	gfx_y[6][6]=67;
+
+	// CAVEMAN
+	gfx_x[6][8]=452;	gfx_y[6][8]=140;
+
+	// EGGS
+	gfx_x[6][9]=567;	gfx_y[6][9]=175;
+	gfx_x[6][10]=521;	gfx_y[6][10]=175;
+	gfx_x[6][11]=478;	gfx_y[6][11]=175;
+
+	// DINO HEAD RIGHT
+	gfx_x[6][12]=534;	gfx_y[6][12]=50;
+
+	// DINO HEAD LEFT + FIRE
+	gfx_x[6][13]=451;	gfx_y[6][13]=56;
+
+	// DINO NECK PART
+	gfx_x[6][14]=507;	gfx_y[6][14]=62;
+
+	// HIT
+	gfx_x[6][15]=461;	gfx_y[6][15]=47;
+
+	// DINO SEES STARS
+	gfx_x[6][16]=529;	gfx_y[6][16]=22;
+
+	// DIN HEAD UP
+	gfx_x[6][17]=471;	gfx_y[6][17]=7;
+
+
+	// GRID 7
+	// VOLACO EXPLOSION
+	gfx_x[7][1]=591;	gfx_y[7][1]=7;
+
+	// VOLCANO
+	gfx_x[7][6]=600;	gfx_y[7][6]=75;
+
+	// BABY HATCHED
+	gfx_x[7][10]=604;	gfx_y[7][10]=123;
+
+	// BABY 2
+	gfx_x[7][11]=630;	gfx_y[7][11]=144;
+
+	// LAVA RUN
+	gfx_x[7][13]=600;	gfx_y[7][13]=90;
+
+	// VOLCANO ERRUPTIONS
+	gfx_x[7][15]=608;	gfx_y[7][15]=62;
+	gfx_x[7][16]=609;	gfx_y[7][16]=48;
+
 	for(x=0;x<19;x++) {
 		for(y=0;y<10;y++) {
 			sprintf(filename,"res/gfx/caveman/%d.%d.png",y,x);
