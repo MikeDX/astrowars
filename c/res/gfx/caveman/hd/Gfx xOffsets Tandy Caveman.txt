@@ -1,0 +1,10 @@
+0.x = 8
+1.x = 110
+2.x = 220
+3.x = 319
+4.x = 418
+5.x = 517
+6.x = 616
+7.x = 820
+
+fits in 1000x300 px window (layout with 8px thickness grid)
