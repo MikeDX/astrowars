@@ -110,7 +110,9 @@ void do_inputs(void) {
 	uint8_t bit;
 
 	while(SDL_PollEvent( &event)) {
+		
 		bit = 0;
+
 		if(event.type == SDL_KEYDOWN)
 			bit=1;
 
@@ -163,7 +165,7 @@ void mainloop(void) {
 
 	do_inputs();
 
-//	if((!pevent && get_ms() <next_ms) || cpu.audio_avail > obtained.samples) {
+// 	if((!pevent && get_ms() <next_ms) || cpu.audio_avail > obtained.samples) {
 // #ifdef __EMSCRIPTEN__
 // 	if( cpu.audio_avail > obtained.samples && !pevent) {
 // //		printf("Audio: %d %d\n",cpu.audio_avail, obtained.samples);
@@ -221,7 +223,7 @@ void mainloop(void) {
 	}
 
 	if(!pevent) {
-		if(get_ms()<next_ms)
+//		if(get_ms()<next_ms+1000/FPS)
 			active_game->display_update();	
 	}
 }
@@ -261,7 +263,7 @@ int init_sound(void) {
     wanted.freq = cpu.sound_frequency;
     wanted.format = AUDIO_U8;
     wanted.channels = 1;    /* 1 = mono, 2 = stereo */
-    wanted.samples = 2048;   /* Good low-latency value for callback */
+    wanted.samples = 512;   /* Good low-latency value for callback */
     wanted.callback = fill_audio;
     wanted.userdata = NULL;
 
@@ -275,13 +277,22 @@ int init_sound(void) {
     return(0);
 }
 
+void cleanup(void) {
+	active_game->close_gfx();
+	SDL_CloseAudio();
+	SDL_Quit();
+
+}
+
 
 int main(int argc, char *argv[])
 {
 
-	SDL_Init(SDL_INIT_EVERYTHING | SDL_INIT_AUDIO);
+	SDL_Init(SDL_INIT_EVERYTHING);
 	init_sound();
 	memset(audiobuf,0,sizeof(audiobuf));
+
+	atexit(cleanup);
 
 	active_game = &game_astrowars;
 //	active_game = &game_caveman;
@@ -327,7 +338,16 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	active_game->cpu->ram[0x768]=0x48;
+	// active_game->cpu->rom[0x768]=0x0;
+	// active_game->cpu->rom[0x769]=0x0;
+//	active_game->cpu->rom[0x18]=0x48;
+//	active_game->cpu->rom[0x769]=0x0;
+
+	// active_game->cpu->rom[0x0]=0x0;
+	// active_game->cpu->rom[0x1]=0x0;
+	// active_game->cpu->rom[0x2]=0x0;
+	// active_game->cpu->rom[0x3]=0x0;
+
 
 #ifdef __EMSCRIPTEN__
 	emscripten_set_main_loop(mainloop,0,1);
@@ -335,6 +355,7 @@ int main(int argc, char *argv[])
 	while(running) {
 		mainloop();
 	}
+
 	SDL_Quit();
 #endif
 	return 0;

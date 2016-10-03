@@ -10,6 +10,7 @@ vfd_game game_astrowars = {
 	.rom = "astrowars.rom",
 	.romsize = 0x800,
 	.setup_gfx = astrowars_setup_gfx,
+	.close_gfx = astrowars_close_gfx,
 	.display_update = astrowars_display_update,
 	.input_r = astrowars_input_r,
 	.output_w = astrowars_output_w,
@@ -21,6 +22,23 @@ SDL_Surface *bg,*bezel,*vfd_display, *tmpscreen;
 
 int gfx_x[10][15];
 int gfx_y[10][15];
+
+void astrowars_close_gfx(void) {
+	int x,y;
+
+	for(x=0;x<15;x++) {
+		for(y=0;y<10;y++) {
+			if(gfx[x][y]) {
+				SDL_FreeSurface(gfx[x][y]);
+				gfx[x][y]=NULL;
+			}
+		}
+	}
+	SDL_FreeSurface(bg);
+	SDL_FreeSurface(bezel);
+	SDL_FreeSurface(vfd_display);
+	SDL_FreeSurface(tmpscreen);
+}
 
 void astrowars_setup_gfx(void) {
 	int x = 0;

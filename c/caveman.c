@@ -8,6 +8,7 @@ vfd_game game_caveman = {
 	.rom = "caveman.rom",
 	.romsize = 0x800,
 	.setup_gfx = caveman_setup_gfx,
+	.close_gfx = caveman_close_gfx,
 	.display_update = caveman_display_update,
 	.input_r = caveman_input_r,
 	.output_w = caveman_output_w,
@@ -19,6 +20,20 @@ SDL_Surface *bg;
 
 int gfx_x[20][20];
 int gfx_y[20][20];
+
+void caveman_close_gfx(void) {
+	int x,y;
+
+	for(y=0;y<19;y++) {
+		for(x=0;x<10;x++) {
+			if(gfx[x][y]) {
+				SDL_FreeSurface(gfx[x][y]);
+				gfx[x][y]=NULL;
+			}
+		}
+	}
+	SDL_FreeSurface(bg);
+}
 
 void caveman_setup_gfx(void) {
 	int x = 0;
@@ -340,7 +355,7 @@ void caveman_setup_gfx(void) {
 		int xoffs[]={8,110,220,319,418,517,616,820};
 
 		for(x=0;x<19;x++) {
-			for(y=0;y<8;y++) {
+			for(y=0;y<10;y++) {
 				gfx_x[y][x]=10+xoffs[y];
 				gfx_y[y][x]=10;
 			}
@@ -348,24 +363,33 @@ void caveman_setup_gfx(void) {
 
 	}
 
+	sprintf(filename,"res/gfx/caveman/%svfd.png",hd);
+
+	bg=IMG_Load(filename);
+
 	for(x=0;x<19;x++) {
 		for(y=0;y<10;y++) {
 			sprintf(filename,"res/gfx/caveman/%s%d.%d.png",hd,y,x);
-			gfx[y][x]=IMG_Load(filename);		
+			gfx[y][x]=NULL;
+			gfx[y][x]=IMG_Load(filename);
 			if(gfx[y][x]) {
+//				printf("%s \n",filename);
 				rect.x=gfx_x[y][x];
 				rect.y=gfx_y[y][x];
 				rect.w=gfx[y][x]->w;
 				rect.h=gfx[y][x]->h;
-				SDL_BlitSurface(gfx[y][x],NULL, screen,&rect);
+				SDL_BlitSurface(gfx[y][x],NULL, bg,&rect);
+			} else {
+//				printf("Failed: %s\n",filename);
 			}	
 		}
 	}
 
-
-	bg=IMG_Load("res/gfx/caveman/bg3.png");		
+	SDL_BlitSurface(bg,NULL, screen,NULL);
 
 	SDL_Flip(screen);
+
+	SDL_PauseAudio(0);
 
 }
 
@@ -374,6 +398,7 @@ void caveman_display_update(void) {
 	SDL_Rect rect;
 
 //	SDL_BlitSurface(bg, NULL, screen, NULL);
+//	SDL_FillRect(bg, NULL, SDL_MapRGB(bg->format, 0,0,0));
 	SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0,0,0));
 
 
@@ -389,8 +414,10 @@ void caveman_display_update(void) {
 
 		}
 	}
+//	SDL_BlitSurface(bg,NULL, screen,NULL);
+
 	SDL_Flip(screen);
-	SDL_PauseAudio(0);
+
 
 }
 void caveman_prepare_display(ucom4cpu *cpu) {

@@ -8,3 +8,4 @@ void astrowars_setup_gfx(void);
 void astrowars_display_update(void);
 void astrowars_output_w(ucom4cpu *cpu, int index, uint8_t data);
 uint8_t astrowars_input_r(ucom4cpu *cpu, int index);
+void astrowars_close_gfx(void);

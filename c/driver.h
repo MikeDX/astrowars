@@ -27,8 +27,8 @@ typedef struct _gamedriver {
 	void (*cpu_exec)(int ticks);
 
 	void (*setup_gfx)(void);
+	void (*close_gfx)(void);
 	void (*display_update)(void);
-
 
 	uint8_t (*input_r)(ucom4cpu *cpu, int index);
 	void (*output_w)(ucom4cpu *cpu, int index, uint8_t data);
