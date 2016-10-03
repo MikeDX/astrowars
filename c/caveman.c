@@ -25,15 +25,18 @@ void caveman_setup_gfx(void) {
 	int y = 0;
 	char filename[255];
 	SDL_Rect rect;
+
+	char hd[4]="hd/";
 	
 	IMG_Init(IMG_INIT_PNG);
 	memset(gfx_x,0,sizeof(gfx_x));
 	memset(gfx_y,0,sizeof(gfx_y));
 
-	screen = SDL_SetVideoMode(684,199,32,SDL_HWSURFACE);
 
 
+	if(0) {
 // GFX
+	screen = SDL_SetVideoMode(684,199,32,SDL_HWSURFACE);
 
 	gfx_x[0][0]=27;		gfx_y[0][0]=8;
 	gfx_x[0][1]=53;		gfx_y[0][1]=47;
@@ -331,9 +334,23 @@ void caveman_setup_gfx(void) {
 	gfx_x[7][15]=608;	gfx_y[7][15]=62;
 	gfx_x[7][16]=609;	gfx_y[7][16]=48;
 
+	} else {
+		screen = SDL_SetVideoMode(1000,300,32,SDL_HWSURFACE);
+
+		int xoffs[]={8,110,220,319,418,517,616,820};
+
+		for(x=0;x<19;x++) {
+			for(y=0;y<8;y++) {
+				gfx_x[y][x]=10+xoffs[y];
+				gfx_y[y][x]=10;
+			}
+		}
+
+	}
+
 	for(x=0;x<19;x++) {
 		for(y=0;y<10;y++) {
-			sprintf(filename,"res/gfx/caveman/%d.%d.png",y,x);
+			sprintf(filename,"res/gfx/caveman/%s%d.%d.png",hd,y,x);
 			gfx[y][x]=IMG_Load(filename);		
 			if(gfx[y][x]) {
 				rect.x=gfx_x[y][x];
@@ -356,7 +373,10 @@ void caveman_display_update(void) {
 	int x,y;
 	SDL_Rect rect;
 
-	SDL_BlitSurface(bg, NULL, screen, NULL);
+//	SDL_BlitSurface(bg, NULL, screen, NULL);
+	SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0,0,0));
+
+
 	for(x=0;x<19;x++) {
 		for(y=0;y<10;y++) {
 			if(gfx[y][x] && (active_game->cpu->display_cache[y]&1<<x)) {

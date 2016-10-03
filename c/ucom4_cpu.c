@@ -1,11 +1,13 @@
 /************************
  *
- * ASTRO WARS EMULATOR
+ * UCOM4 CPU EMULATOR
  * 
  * Should evolve to multi ucom4 / VFD EMU
  *
  * (c) 2016 MikeDX
  * 
+ * Thanks to MAME Source
+ *
  *************************/
 
 #include "driver.h"
@@ -118,8 +120,6 @@ void ucom4_display_update(ucom4cpu *cpu)
 {
 	uint32_t active_state[0x20];
 	uint32_t ds;
-	int y,x;
-	int mul;
 	int decay_time = 80;
 
 	// handle decay
@@ -203,7 +203,7 @@ void set_display_size(ucom4cpu *cpu, int maxx, int maxy)
 
 void ucom4_display_matrix(ucom4cpu *cpu, int maxx, int maxy, int setx, int sety) {
 	uint32_t mask = (1 << maxx) - 1;
-	int y,x;
+	int y;
 	set_display_size(cpu, maxx, maxy);
 
 	// update current state

@@ -18,6 +18,8 @@
 #include "driver.h"
 
 #define FPS 50
+#define VOLUME 200
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -42,19 +44,14 @@ struct input_event {
 } events[MAX_EVENTS], *pevent = NULL;
 
 
-static uint8_t *audio_chunk;
-static uint32_t audio_len;
-static uint8_t *audio_pos;
-
 extern uint8_t audiobuf[1024];
 extern int aindex;
 extern int audiosize;
 
-static uint8_t sbuf[2048];
-
 SDL_AudioSpec wanted, obtained;
 int sound_pos  = 0;
 int last_a = 0;
+
 
 
 ucom4cpu cpu;
@@ -90,7 +87,8 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 	result = fread(cpu->rom,1,len,f);
 
 	fclose(f);
-	return len;	
+	
+	return result;	
 
 }
 
@@ -99,17 +97,12 @@ int load_rom(ucom4cpu *cpu, char *file, int size)
 int totalticks = 0;
 int running = 1;
 
-struct timeval tv;
-static long ms = 0;
-static long next_ms = 0;
+uint32_t next_ms = 0;
+
 SDL_Event event;
 
-unsigned long long get_ms() {
-	gettimeofday(&tv, NULL);
-	unsigned long long millisecondsSinceEpoch =
-    (unsigned long long)(tv.tv_sec) * 1000 +
-    (unsigned long long)(tv.tv_usec) / 1000;
-    return millisecondsSinceEpoch;
+uint32_t get_ms() {
+	return SDL_GetTicks();
 }
 
 void do_inputs(void) {
@@ -147,11 +140,17 @@ void do_inputs(void) {
 						case SDLK_1: // START
 							inputs[4]=bit;
 							break;
+						
+						default:
+							break;
+
 					}
 				}
 				break;
 			case SDL_QUIT:
 				running = 0;
+				break;
+			default:
 				break;
 		}
 	}
@@ -160,18 +159,17 @@ void do_inputs(void) {
 
 void mainloop(void) {
 
-	uint8_t bit;
 	int x = 0;
 
 	do_inputs();
 
 //	if((!pevent && get_ms() <next_ms) || cpu.audio_avail > obtained.samples) {
-#ifdef __EMSCRIPTEN__
-	if( cpu.audio_avail > obtained.samples && !pevent) {
-//		printf("Audio: %d %d\n",cpu.audio_avail, obtained.samples);
-		return;
-	}
-#endif
+// #ifdef __EMSCRIPTEN__
+// 	if( cpu.audio_avail > obtained.samples && !pevent) {
+// //		printf("Audio: %d %d\n",cpu.audio_avail, obtained.samples);
+// 		return;
+// 	}
+// #endif
 
 	if(get_ms() >= next_ms || pevent) {
 		next_ms +=1000/FPS;
@@ -222,13 +220,14 @@ void mainloop(void) {
 
 	}
 
-//	if(!pevent)
-	active_game->display_update();	
-
+	if(!pevent) {
+		if(get_ms()<next_ms)
+			active_game->display_update();	
+	}
 }
 
 void level_w(ucom4cpu *cpu, uint8_t data) {
-	data *=200;
+	data *=VOLUME;
 	cpu->audio_level = data;
 }
 
@@ -236,19 +235,9 @@ void level_w(ucom4cpu *cpu, uint8_t data) {
 void fill_audio(void *udata, Uint8 *stream, int len)
 {
 
-	int len2;
 	int z;
 
-	audio_len = cpu.audio_avail;
-
-//	printf("Samples available: %d\n", audio_len);
-
-
-    len2 = ( len > audio_len ? audio_len : len );
-
-//	printf("%d %d %d %d %d %d\n",len, len2, audio_len, obtained.freq, obtained.channels, obtained.samples);
-
-	len = len2;
+    len = ( len > cpu.audio_avail ? cpu.audio_avail : len );
 
 	for(z=0;z<len;z++) {
 		stream[z] = audiobuf[sound_pos];//(rand()*1)*255;//(uint8_t)audiobuf[a];//*sin(F*(double)z); 
@@ -272,7 +261,7 @@ int init_sound(void) {
     wanted.freq = cpu.sound_frequency;
     wanted.format = AUDIO_U8;
     wanted.channels = 1;    /* 1 = mono, 2 = stereo */
-    wanted.samples = 1024;   /* Good low-latency value for callback */
+    wanted.samples = 2048;   /* Good low-latency value for callback */
     wanted.callback = fill_audio;
     wanted.userdata = NULL;
 
@@ -289,13 +278,13 @@ int init_sound(void) {
 
 int main(int argc, char *argv[])
 {
-	int x,y;
 
 	SDL_Init(SDL_INIT_EVERYTHING | SDL_INIT_AUDIO);
 	init_sound();
 	memset(audiobuf,0,sizeof(audiobuf));
 
 	active_game = &game_astrowars;
+//	active_game = &game_caveman;
 
 	if(argc>1) {
 		if(!strcmp(argv[1],"caveman")) {
@@ -338,8 +327,10 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	active_game->cpu->ram[0x768]=0x48;
+
 #ifdef __EMSCRIPTEN__
-	emscripten_set_main_loop(mainloop,60,1);
+	emscripten_set_main_loop(mainloop,0,1);
 #else
 	while(running) {
 		mainloop();

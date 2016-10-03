@@ -3,6 +3,8 @@
 #include "vfd_emu.h"
 #include "astrowars.h"
 
+#include "lib/SDL_rotozoom.h"
+
 vfd_game game_astrowars = { 
 	.prepare_display = astrowars_prepare_display,
 	.rom = "astrowars.rom",
@@ -15,7 +17,7 @@ vfd_game game_astrowars = {
 };
 
 SDL_Surface *gfx[10][15];
-SDL_Surface *bg;
+SDL_Surface *bg,*bezel,*vfd_display, *tmpscreen;
 
 int gfx_x[10][15];
 int gfx_y[10][15];
@@ -29,8 +31,16 @@ void astrowars_setup_gfx(void) {
 	SDL_Rect rect;
 	memset(gfx_x,0,sizeof(gfx_x));
 	memset(gfx_y,0,sizeof(gfx_y));
-	
-	screen = SDL_SetVideoMode(193,684,32,SDL_HWSURFACE);
+
+	bg=IMG_Load("res/gfx/astrowars/bg3.png");		
+
+	bezel=IMG_Load("res/gfx/astrowars/bezel.png");
+
+	tmpscreen=IMG_Load("res/gfx/astrowars/bezel.png");
+
+	screen = SDL_SetVideoMode(bezel->w,bezel->h,32,SDL_HWSURFACE);
+
+	vfd_display=IMG_Load("res/gfx/astrowars/bg3.png");
 
 	// GRID 0
 	// fig8 digit 1
@@ -169,12 +179,12 @@ void astrowars_setup_gfx(void) {
 				rect.y=gfx_y[y][x];
 				rect.w=gfx[y][x]->w;
 				rect.h=gfx[y][x]->h;
-				SDL_BlitSurface(gfx[y][x],NULL, screen,&rect);
+				SDL_BlitSurface(gfx[y][x],NULL, vfd_display,&rect);
 			}	
 		}
 	}
 	
-	bg=IMG_Load("res/gfx/astrowars/bg3.png");		
+	SDL_BlitSurface(vfd_display, NULL, screen, NULL);
 
 	SDL_Flip(screen);
 }
@@ -183,7 +193,16 @@ void astrowars_display_update(void) {
 	int x,y;
 	SDL_Rect rect;
 
-	SDL_BlitSurface(bg, NULL, screen, NULL);
+	SDL_Surface *tmp;
+
+
+//	SDL_BlitSurface(bg, NULL, tmpscreen, NULL);
+	SDL_FillRect(tmpscreen, NULL, SDL_MapRGB(tmpscreen->format, 0,0,0));
+	
+//	SDL_LockSurface( vfd_display );
+
+	SDL_FillRect(vfd_display, NULL, SDL_MapRGB(vfd_display->format, 0,0,0));
+	
 	for(x=0;x<15;x++) {
 		for(y=0;y<10;y++) {
 			if(gfx[y][x] && (active_game->cpu->display_cache[y]&1<<x)) {
@@ -191,11 +210,34 @@ void astrowars_display_update(void) {
 				rect.y=gfx_y[y][x];
 				rect.w=gfx[y][x]->w;
 				rect.h=gfx[y][x]->h;
-				SDL_BlitSurface(gfx[y][x],NULL, screen,&rect);
+				SDL_BlitSurface(gfx[y][x],NULL, vfd_display,&rect);
 			}	
 
 		}
 	}
+
+//	SDL_UnlockSurface( vfd_display );
+
+//	SDL_LockSurface( screen );
+
+
+	rect.x=192;
+	rect.y=84;
+	rect.w=274-182;
+	rect.h=362-84;
+
+	tmp = rotozoomSurface(vfd_display, 0, .35,1);//rect.w/vfd_display->w,1);
+
+	SDL_BlitSurface(tmp, NULL, tmpscreen, &rect);
+
+	SDL_FreeSurface(tmp);
+
+	SDL_BlitSurface(bezel, NULL, tmpscreen, NULL);
+
+	SDL_BlitSurface(tmpscreen, NULL, screen, NULL);
+
+//	SDL_UnlockSurface( screen );
+
 	SDL_Flip(screen);
 	SDL_PauseAudio(0);
 
