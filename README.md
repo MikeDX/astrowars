@@ -6,6 +6,6 @@ TOMY (TANDY) CAVEMAN (c version only)
 Play online
 
 http://js.mikedx.co.uk/astrowars.html  
-http://js.mikedx.co.uk/astrowars.html?caveman
+http://js.mikedx.co.uk/caveman_hd.html
 
 
