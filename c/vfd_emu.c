@@ -142,7 +142,11 @@ void do_inputs(void) {
 						case SDLK_1: // START
 							inputs[4]=bit;
 							break;
-						
+
+						case SDLK_q:
+							running = 0;
+							break;			
+
 						default:
 							break;
 
