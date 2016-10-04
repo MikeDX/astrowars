@@ -40,6 +40,8 @@ void astrowars_close_gfx(void) {
 	SDL_FreeSurface(tmpscreen);
 }
 
+#define BEZEL 1
+
 void astrowars_setup_gfx(void) {
 	int x = 0;
 	int y = 0;
@@ -54,9 +56,13 @@ void astrowars_setup_gfx(void) {
 
 	bezel=IMG_Load("res/gfx/astrowars/bezel.png");
 
-	tmpscreen=IMG_Load("res/gfx/astrowars/bezel.png");
+	if(BEZEL)
+		tmpscreen=IMG_Load("res/gfx/astrowars/bezel.png");
+	else
+		tmpscreen = bg;
 
-	screen = SDL_SetVideoMode(bezel->w,bezel->h,32,SDL_HWSURFACE);
+
+	screen = SDL_SetVideoMode(tmpscreen->w,tmpscreen->h,32,SDL_HWSURFACE);
 
 	vfd_display=IMG_Load("res/gfx/astrowars/bg3.png");
 
@@ -238,7 +244,7 @@ void astrowars_display_update(void) {
 
 //	SDL_LockSurface( screen );
 
-
+if(BEZEL) {
 	rect.x=192;
 	rect.y=84;
 	rect.w=274-182;
@@ -255,7 +261,9 @@ void astrowars_display_update(void) {
 	SDL_BlitSurface(tmpscreen, NULL, screen, NULL);
 
 //	SDL_UnlockSurface( screen );
-
+	} else {
+		SDL_BlitSurface(vfd_display,NULL,screen,NULL);
+	}
 	SDL_Flip(screen);
 	SDL_PauseAudio(0);
 
